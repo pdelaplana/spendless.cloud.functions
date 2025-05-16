@@ -1,0 +1,13 @@
+{
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4"
+  },
+  "scripts": {
+    "lint": "biome check functions/src",
+    "lint:fix": "biome check --apply functions/src",
+    "format": "biome format functions/src",
+    "format:fix": "biome format --write functions/src",
+    "biome:check": "biome check functions/src",
+    "biome:fix": "biome check --apply functions/src && biome format --write functions/src"
+  }
+}

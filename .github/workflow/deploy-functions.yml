@@ -1,0 +1,57 @@
+name: Deploy Firebase Functions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'functions/**'
+  workflow_dispatch: # Manual trigger option
+
+jobs:
+  deploy:
+    name: Deploy Firebase Functions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'functions/package-lock.json'
+      
+      - name: Install dependencies
+        run: |
+          cd functions
+          npm ci
+      
+      - name: Run Biome lint & format check
+        run: npm run biome:check
+      
+      - name: Create Firebase service account file
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > functions/spendless-firebase-adminsdk.json
+      
+      - name: Update startup.ts with environment variables
+        run: |
+          cd functions/src
+          sed -i 's|https://d12084e9018ac83c6f5a7b262ef5956d@o4509115240022016.ingest.us.sentry.io/4509115269709824|${{ secrets.SENTRY_DSN }}|g' startup.ts
+          sed -i "s|'development'|'${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}'|g" startup.ts
+      
+      - name: Build functions
+        run: |
+          cd functions
+          npm run build
+      
+      - name: Deploy to Firebase
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          channelId: live
+          entryPoint: './functions'
