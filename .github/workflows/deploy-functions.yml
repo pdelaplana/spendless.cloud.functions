@@ -69,5 +69,5 @@ jobs:
         with:
           args: deploy --only functions
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GOOGLE_APPLICATION_CREDENTIALS: functions/spendless-firebase-adminsdk.json
         
