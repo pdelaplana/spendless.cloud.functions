@@ -1,20 +1,17 @@
 import * as Sentry from '@sentry/node';
 
-import {
-  onDocumentCreated,
-} from 'firebase-functions/v2/firestore';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { exportData } from './jobs/exportData';
-import { Job } from './types';
-
+import type { Job } from './types';
 
 export const processJob = onDocumentCreated('jobs/{jobId}', async (event) => {
-  Sentry.startSpan({name: 'processJob', op: 'function.firestore.onDocumentCreated'}, async (span) => {
+  Sentry.startSpan({ name: 'processJob', op: 'function.firestore.onDocumentCreated' }, async () => {
     const jobId = event.params.jobId;
     const snapshot = event.data;
     if (!snapshot) {
       console.error(`No data found for job ID: ${jobId}`);
       return;
-    };
+    }
 
     const job = snapshot.data() as Job;
 
@@ -33,8 +30,5 @@ export const processJob = onDocumentCreated('jobs/{jobId}', async (event) => {
     }
 
     return null;
-
   });
-
-
 });

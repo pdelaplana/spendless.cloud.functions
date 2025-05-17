@@ -45,7 +45,9 @@ jobs:
           npm ci
       
       - name: Run Biome lint & format check
-        run: npm run biome:check
+        run: |
+          cd functions
+          npm run biome:check
       
       - name: Create Firebase service account file
         run: |

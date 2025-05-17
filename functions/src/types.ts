@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import type { Timestamp } from 'firebase-admin/firestore';
 
 export type JobType = 'exportData' | 'anotherJobType' | 'anotherJobType2';
 
@@ -12,5 +12,4 @@ export type Job = {
   completedAt: Timestamp | null;
   errors: string[];
   attempts: number;
-  taskData?: Record<string, any>;
-}
+};

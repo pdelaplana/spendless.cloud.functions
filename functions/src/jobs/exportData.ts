@@ -1,55 +1,50 @@
-import { HttpsError } from 'firebase-functions/v2/https';
-import * as params from 'firebase-functions/params';
-import * as admin from 'firebase-admin';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as admin from 'firebase-admin';
+import * as params from 'firebase-functions/params';
+import { HttpsError } from 'firebase-functions/v2/https';
 
 import { parse } from 'json2csv';
 
-export const exportData = async ({userId, userEmail}:{ userId: string, userEmail: string}) => {
+export const exportData = async ({ userId, userEmail }: { userId: string; userEmail: string }) => {
+  if (!userId) {
+    throw new Error('User ID is required.');
+  }
 
-	if (!userId) {
-		throw new Error("User ID is required.");
-	}
+  try {
+    // Validate collection name (you can add more validation as needed)
+    const accountRef = await admin
+      .firestore()
+      .collection('accounts')
+      .doc(userId ?? '');
 
-	try {
-		// Validate collection name (you can add more validation as needed)
-		const accountRef = await admin
-			.firestore()
-			.collection('accounts')
-			.doc(userId ?? '');
+    if (!accountRef) {
+      throw new Error(`Account with ID ${userId} not found.`);
+    }
 
-		if (!accountRef) {
-			throw new Error(`Account with ID ${userId} not found.`);
-		}
-
-		// geet account information from the document
-		const accountSnapshot = await accountRef.get();
+    // geet account information from the document
+    const accountSnapshot = await accountRef.get();
     const account = accountSnapshot.data();
 
-		// get periods collection
-		const periodsSnapshot = await accountRef.collection('periods').get();
-		const periods = periodsSnapshot.docs;
+    // get periods collection
+    const periodsSnapshot = await accountRef.collection('periods').get();
+    const periods = periodsSnapshot.docs;
 
-		// Get spending data from Firestore
-		const spendingSnapshot = await accountRef.collection('spending').get();
+    // Get spending data from Firestore
+    const spendingSnapshot = await accountRef.collection('spending').get();
 
-		// Convert Firestore data to array
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		const spending: any[] = [];
-		for (const doc of spendingSnapshot.docs) {
-
-			// Combine document ID with document data
-      const period = (periods
-        .find((period) => period.id === doc.data().periodId)
-        ?.data() ?? {});
-
+    // Convert Firestore data to array
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    const spending: any[] = [];
+    for (const doc of spendingSnapshot.docs) {
+      // Combine document ID with document data
+      const period = periods.find((period) => period.id === doc.data().periodId)?.data() ?? {};
 
       spending.push({
-				id: doc.id,
+        id: doc.id,
 
-				spendingDate: doc.data().date.toDate(),
+        spendingDate: doc.data().date.toDate(),
         spendingAmount: doc.data().amount,
         spendingDescription: doc.data().description,
         spendingCategory: doc.data().category,
@@ -77,64 +72,59 @@ export const exportData = async ({userId, userEmail}:{ userId: string, userEmail
         accountDateFormat: account?.dateFormat,
         accountCreatedAt: account?.createdAt.toDate(),
         accountUpdatedAt: account?.updatedAt.toDate(),
-			});
-		}
+      });
+    }
 
-		// If we have no documents, throw an error
-		if (spending.length === 0) {
-			throw new HttpsError('not-found', `No data found for ${userEmail}.`);
-		}
+    // If we have no documents, throw an error
+    if (spending.length === 0) {
+      throw new HttpsError('not-found', `No data found for ${userEmail}.`);
+    }
 
-		// Convert JSON to CSV
-		const csv = parse(spending);
+    // Convert JSON to CSV
+    const csv = parse(spending);
 
-		// Create temp file
-		const timestamp = Date.now();
-		const tempFilePath = path.join(
-			os.tmpdir(),
-			`spending-export-${userId}-${timestamp}.csv`,
-		);
-		fs.writeFileSync(tempFilePath, csv);
+    // Create temp file
+    const timestamp = Date.now();
+    const tempFilePath = path.join(os.tmpdir(), `spending-export-${userId}-${timestamp}.csv`);
+    fs.writeFileSync(tempFilePath, csv);
 
-		// Upload to Firebase Storage
-		const defaultBucket =
-			params.storageBucket.value() || admin.storage().bucket().name;
-		const bucket = admin.storage().bucket(defaultBucket);
-		const storageFilePath = `users/${userId}/exports/spending-${timestamp}.csv`;
+    // Upload to Firebase Storage
+    const defaultBucket = params.storageBucket.value() || admin.storage().bucket().name;
+    const bucket = admin.storage().bucket(defaultBucket);
+    const storageFilePath = `users/${userId}/exports/spending-${timestamp}.csv`;
 
-		await bucket.upload(tempFilePath, {
-			destination: storageFilePath,
-			metadata: {
-				contentType: "text/csv",
-			},
-		});
+    await bucket.upload(tempFilePath, {
+      destination: storageFilePath,
+      metadata: {
+        contentType: 'text/csv',
+      },
+    });
 
-		// Clean up temp file
-		fs.unlinkSync(tempFilePath);
+    // Clean up temp file
+    fs.unlinkSync(tempFilePath);
 
-    console.log("Download URL:", storageFilePath);
+    console.log('Download URL:', storageFilePath);
 
+    const [url] = await bucket.file(storageFilePath).getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+    console.log('Download URL:', url);
 
-		const [url] = await bucket.file(storageFilePath).getSignedUrl({
-			action: "read",
-			expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-		});
-		console.log("Download URL:", url);
+    // Send email notification
+    //await sendEmailNotification(userEmail, collectionName, url);
 
-		// Send email notification
-		//await sendEmailNotification(userEmail, collectionName, url);
+    // Optionally, also send a notification via Firebase messaging
+    //await sendFirebaseNotification(userId, collectionName, url);
 
-		// Optionally, also send a notification via Firebase messaging
-		//await sendFirebaseNotification(userId, collectionName, url);
-
-		// Return success with download URL
-		return {
-			success: true,
-			message: `${userEmail} data exported successfully.`,
-			downloadUrl: url,
-		};
-	} catch (error) {
-		console.error("Error exporting data:", error);
-		throw new Error("Failed to export data");
-	}
+    // Return success with download URL
+    return {
+      success: true,
+      message: `${userEmail} data exported successfully.`,
+      downloadUrl: url,
+    };
+  } catch (error) {
+    console.error('Error exporting data:', error);
+    throw new Error('Failed to export data');
+  }
 };

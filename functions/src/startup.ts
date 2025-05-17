@@ -1,7 +1,7 @@
+import * as fs from 'node:fs';
+import * as Sentry from '@sentry/node';
 // filepath: d:\Repos\spendless\spendless.cloud.functions\functions\src\startup.ts
 import * as admin from 'firebase-admin';
-import * as Sentry from '@sentry/node';
-import * as fs from 'fs';
 import { defineString } from 'firebase-functions/params';
 
 const sentryDsnConfig = defineString('SENTRY_DSN');
