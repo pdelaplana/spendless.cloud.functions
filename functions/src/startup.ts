@@ -1,11 +1,10 @@
 import * as fs from 'node:fs';
 import * as Sentry from '@sentry/node';
-// filepath: d:\Repos\spendless\spendless.cloud.functions\functions\src\startup.ts
 import * as admin from 'firebase-admin';
 import { defineString } from 'firebase-functions/params';
 
 const sentryDsnConfig = defineString('SENTRY_DSN');
-const envConfig = defineString('ENV');
+const envConfig = defineString('ENVIRONMENT');
 
 // Initialize Sentry with environment variables when available
 Sentry.init({

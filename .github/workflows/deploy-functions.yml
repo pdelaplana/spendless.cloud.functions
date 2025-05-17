@@ -35,7 +35,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: 'functions/package-lock.json'
       
@@ -53,11 +53,11 @@ jobs:
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > functions/spendless-firebase-adminsdk.json
       
-      - name: Update startup.ts with environment variables
+      - name: Create Environment file
         run: |
-          cd functions/src
-          sed -i 's|https://d12084e9018ac83c6f5a7b262ef5956d@o4509115240022016.ingest.us.sentry.io/4509115269709824|${{ secrets.SENTRY_DSN }}|g' startup.ts
-          sed -i "s|'development'|'${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}'|g" startup.ts
+          echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" > functions/.env
+          echo "ENVIRONMENT=${{ github.event.inputs.environment }}" > functions/.env
+          echo "DEBUG_MODE=${{ github.event.inputs.debug_mode }}" >> functions/.env
       
       - name: Build functions
         run: |
