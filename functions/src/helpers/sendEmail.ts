@@ -2,17 +2,16 @@ import * as nodemailer from 'nodemailer';
 import mailGunTransport from 'nodemailer-mailgun-transport';
 
 export async function sendEmailNotification(email: string, downloadUrl: string) {
-
   // Configure Mailgun transport
   const mailgunConfig = {
     auth: {
       domain: process.env.MAILGUN_DOMAIN || '',
       apiKey: process.env.MAILGUN_API_KEY || '',
-    }
+    },
   };
 
   // Create the transporter with Mailgun configuration
-  const transporter = nodemailer.createTransport( mailGunTransport(mailgunConfig));
+  const transporter = nodemailer.createTransport(mailGunTransport(mailgunConfig));
 
   const mailOptions = {
     from: '"Spendless" <noreply@yourapp.com>',
