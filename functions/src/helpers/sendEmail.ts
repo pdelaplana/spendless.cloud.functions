@@ -1,19 +1,21 @@
-import * as functions from 'firebase-functions';
 import * as nodemailer from 'nodemailer';
+import mailGunTransport from 'nodemailer-mailgun-transport';
 
 export async function sendEmailNotification(email: string, downloadUrl: string) {
-  // Configure nodemailer with your email service
-  // Note: In production, you'd use a proper email service like SendGrid, Mailgun, etc.
-  const transporter = nodemailer.createTransport({
-    service: 'gmail', // Replace with your email service
+
+  // Configure Mailgun transport
+  const mailgunConfig = {
     auth: {
-      user: functions.config().email.user,
-      pass: functions.config().email.pass,
-    },
-  });
+      domain: process.env.MAILGUN_DOMAIN || '',
+      apiKey: process.env.MAILGUN_API_KEY || '',
+    }
+  };
+
+  // Create the transporter with Mailgun configuration
+  const transporter = nodemailer.createTransport( mailGunTransport(mailgunConfig));
 
   const mailOptions = {
-    from: '"Your App" <noreply@yourapp.com>',
+    from: '"Spendless" <noreply@yourapp.com>',
     to: email,
     subject: 'Your data export is ready',
     html: `

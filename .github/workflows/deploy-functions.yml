@@ -58,6 +58,8 @@ jobs:
           echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" > functions/.env
           echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> functions/.env
           echo "DEBUG_MODE=${{ github.event.inputs.debug_mode }}" >> functions/.env
+          echo "MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}" >> functions/.env
+          echo "MAILGUN_DOMAIN=${{ secrets.MAILGUN_DOMAIN }}" >> functions/.env
       
       - name: Build functions
         run: |

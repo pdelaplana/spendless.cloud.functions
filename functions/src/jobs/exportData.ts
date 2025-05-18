@@ -7,6 +7,7 @@ import * as params from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import { parse } from 'json2csv';
+import { sendEmailNotification } from '../helpers/sendEmail';
 
 export const exportData = async ({ userId, userEmail }: { userId: string; userEmail: string }) => {
   return Sentry.startSpan({ name: 'exportData', op: 'function.job.exportData' }, async () => {
@@ -112,7 +113,7 @@ export const exportData = async ({ userId, userEmail }: { userId: string; userEm
       console.log('Download URL:', url);
 
       // Send email notification
-      //await sendEmailNotification(userEmail, collectionName, url);
+      await sendEmailNotification(userEmail, url);
 
       // Optionally, also send a notification via Firebase messaging
       //await sendFirebaseNotification(userId, collectionName, url);
