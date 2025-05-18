@@ -56,7 +56,7 @@ jobs:
       - name: Create Environment file
         run: |
           echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" > functions/.env
-          echo "ENVIRONMENT=${{ github.event.inputs.environment }}" > functions/.env
+          echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> functions/.env
           echo "DEBUG_MODE=${{ github.event.inputs.debug_mode }}" >> functions/.env
       
       - name: Build functions
