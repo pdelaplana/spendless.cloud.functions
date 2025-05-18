@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as Sentry from '@sentry/node';
 import * as admin from 'firebase-admin';
 import * as params from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
@@ -8,123 +9,127 @@ import { HttpsError } from 'firebase-functions/v2/https';
 import { parse } from 'json2csv';
 
 export const exportData = async ({ userId, userEmail }: { userId: string; userEmail: string }) => {
-  if (!userId) {
-    throw new Error('User ID is required.');
-  }
-
-  try {
-    // Validate collection name (you can add more validation as needed)
-    const accountRef = await admin
-      .firestore()
-      .collection('accounts')
-      .doc(userId ?? '');
-
-    if (!accountRef) {
-      throw new Error(`Account with ID ${userId} not found.`);
+  return Sentry.startSpan({ name: 'exportData', op: 'function.job.exportData' }, async () => {
+    if (!userId) {
+      throw new Error('User ID is required.');
     }
 
-    // geet account information from the document
-    const accountSnapshot = await accountRef.get();
-    const account = accountSnapshot.data();
+    try {
+      // Validate collection name (you can add more validation as needed)
+      const accountRef = await admin
+        .firestore()
+        .collection('accounts')
+        .doc(userId ?? '');
 
-    // get periods collection
-    const periodsSnapshot = await accountRef.collection('periods').get();
-    const periods = periodsSnapshot.docs;
+      if (!accountRef) {
+        throw new Error(`Account with ID ${userId} not found.`);
+      }
 
-    // Get spending data from Firestore
-    const spendingSnapshot = await accountRef.collection('spending').get();
+      // geet account information from the document
+      const accountSnapshot = await accountRef.get();
+      const account = accountSnapshot.data();
 
-    // Convert Firestore data to array
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-    const spending: any[] = [];
-    for (const doc of spendingSnapshot.docs) {
-      // Combine document ID with document data
-      const period = periods.find((period) => period.id === doc.data().periodId)?.data() ?? {};
+      // get periods collection
+      const periodsSnapshot = await accountRef.collection('periods').get();
+      const periods = periodsSnapshot.docs;
 
-      spending.push({
-        id: doc.id,
+      // Get spending data from Firestore
+      const spendingSnapshot = await accountRef.collection('spending').get();
 
-        spendingDate: doc.data().date.toDate(),
-        spendingAmount: doc.data().amount,
-        spendingDescription: doc.data().description,
-        spendingCategory: doc.data().category,
-        spendingNotes: doc.data().notes,
-        spendingRecurring: doc.data().recurring,
-        spendingCreatedAt: doc.data().createdAt.toDate(),
-        spendingUpdatedAt: doc.data().updatedAt.toDate(),
+      // Convert Firestore data to array
+      // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+      const spending: any[] = [];
+      for (const doc of spendingSnapshot.docs) {
+        // Combine document ID with document data
+        const period = periods.find((period) => period.id === doc.data().periodId)?.data() ?? {};
 
-        periodId: period?.id,
-        periodName: period?.name,
-        periodGoals: period?.goals,
-        periodTargetSpend: period?.targetSpend,
-        periodTargetSavings: period?.targetSavings,
+        spending.push({
+          id: doc.id,
 
-        periodCreatedAt: period?.createdAt.toDate(),
-        periodUpdatedAt: period?.updatedAt.toDate(),
+          spendingDate: doc.data().date.toDate(),
+          spendingAmount: doc.data().amount,
+          spendingDescription: doc.data().description,
+          spendingCategory: doc.data().category,
+          spendingNotes: doc.data().notes,
+          spendingRecurring: doc.data().recurring,
+          spendingCreatedAt: doc.data().createdAt.toDate(),
+          spendingUpdatedAt: doc.data().updatedAt.toDate(),
 
-        periodStartAt: period?.startAt.toDate(),
-        periodEndAt: period?.endAt.toDate(),
-        periodClosedAt: period?.closedAt?.toDate(),
+          periodId: period?.id,
+          periodName: period?.name,
+          periodGoals: period?.goals,
+          periodTargetSpend: period?.targetSpend,
+          periodTargetSavings: period?.targetSavings,
 
-        accountId: account?.id,
-        accountName: account?.name,
-        accountCurrency: account?.currency,
-        accountDateFormat: account?.dateFormat,
-        accountCreatedAt: account?.createdAt.toDate(),
-        accountUpdatedAt: account?.updatedAt.toDate(),
+          periodCreatedAt: period?.createdAt.toDate(),
+          periodUpdatedAt: period?.updatedAt.toDate(),
+
+          periodStartAt: period?.startAt.toDate(),
+          periodEndAt: period?.endAt.toDate(),
+          periodClosedAt: period?.closedAt?.toDate(),
+
+          accountId: account?.id,
+          accountName: account?.name,
+          accountCurrency: account?.currency,
+          accountDateFormat: account?.dateFormat,
+          accountCreatedAt: account?.createdAt.toDate(),
+          accountUpdatedAt: account?.updatedAt.toDate(),
+        });
+      }
+
+      // If we have no documents, throw an error
+      if (spending.length === 0) {
+        throw new HttpsError('not-found', `No data found for ${userEmail}.`);
+      }
+
+      // Convert JSON to CSV
+      const csv = parse(spending);
+
+      // Create temp file
+      const timestamp = Date.now();
+      const tempFilePath = path.join(os.tmpdir(), `spending-export-${userId}-${timestamp}.csv`);
+      fs.writeFileSync(tempFilePath, csv);
+
+      // Upload to Firebase Storage
+      const defaultBucket = params.storageBucket.value() || admin.storage().bucket().name;
+      const bucket = admin.storage().bucket(defaultBucket);
+      const storageFilePath = `users/${userId}/exports/spending-${timestamp}.csv`;
+
+      await bucket.upload(tempFilePath, {
+        destination: storageFilePath,
+        metadata: {
+          contentType: 'text/csv',
+        },
       });
+
+      // Clean up temp file
+      fs.unlinkSync(tempFilePath);
+
+      const [url] = await bucket.file(storageFilePath).getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+      console.log('Download URL:', url);
+
+      // Send email notification
+      //await sendEmailNotification(userEmail, collectionName, url);
+
+      // Optionally, also send a notification via Firebase messaging
+      //await sendFirebaseNotification(userId, collectionName, url);
+
+      // Return success with download URL
+      return {
+        success: true,
+        message: `${userEmail} data exported successfully.`,
+        downloadUrl: url,
+      };
+    } catch (error) {
+      Sentry.captureException(error);
+      console.error('Error exporting data:', error);
+      return {
+        success: false,
+        message: `${error}`,
+      };
     }
-
-    // If we have no documents, throw an error
-    if (spending.length === 0) {
-      throw new HttpsError('not-found', `No data found for ${userEmail}.`);
-    }
-
-    // Convert JSON to CSV
-    const csv = parse(spending);
-
-    // Create temp file
-    const timestamp = Date.now();
-    const tempFilePath = path.join(os.tmpdir(), `spending-export-${userId}-${timestamp}.csv`);
-    fs.writeFileSync(tempFilePath, csv);
-
-    // Upload to Firebase Storage
-    const defaultBucket = params.storageBucket.value() || admin.storage().bucket().name;
-    const bucket = admin.storage().bucket(defaultBucket);
-    const storageFilePath = `users/${userId}/exports/spending-${timestamp}.csv`;
-
-    await bucket.upload(tempFilePath, {
-      destination: storageFilePath,
-      metadata: {
-        contentType: 'text/csv',
-      },
-    });
-
-    // Clean up temp file
-    fs.unlinkSync(tempFilePath);
-
-    console.log('Download URL:', storageFilePath);
-
-    const [url] = await bucket.file(storageFilePath).getSignedUrl({
-      action: 'read',
-      expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
-    console.log('Download URL:', url);
-
-    // Send email notification
-    //await sendEmailNotification(userEmail, collectionName, url);
-
-    // Optionally, also send a notification via Firebase messaging
-    //await sendFirebaseNotification(userId, collectionName, url);
-
-    // Return success with download URL
-    return {
-      success: true,
-      message: `${userEmail} data exported successfully.`,
-      downloadUrl: url,
-    };
-  } catch (error) {
-    console.error('Error exporting data:', error);
-    throw new Error('Failed to export data');
-  }
+  });
 };
