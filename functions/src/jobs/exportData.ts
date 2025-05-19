@@ -1,9 +1,9 @@
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import * as Sentry from '@sentry/node';
-import * as admin from 'firebase-admin';
-import * as params from 'firebase-functions/params';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Sentry from '@sentry/node';
+import admin from 'firebase-admin';
+import params from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import { parse } from 'json2csv';
@@ -110,10 +110,19 @@ export const exportData = async ({ userId, userEmail }: { userId: string; userEm
         action: 'read',
         expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
       });
-      console.log('Download URL:', url);
 
       // Send email notification
-      await sendEmailNotification(userEmail, url);
+      await sendEmailNotification( {
+        from: '"Spendless" <noreply@yourapp.com>',
+        to: userEmail,
+        subject: 'Your data export is ready',
+        html: `
+          <h2>Your data export is ready</h2>
+          <p>You requested an export of your spending data. Your file is now ready for download.</p>
+          <p><a href="${url}">Click here to download your CSV file</a></p>
+          <p>This link will expire in 7 days.</p>
+        `,
+      });
 
       // Optionally, also send a notification via Firebase messaging
       //await sendFirebaseNotification(userId, collectionName, url);
