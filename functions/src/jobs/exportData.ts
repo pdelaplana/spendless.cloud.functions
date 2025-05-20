@@ -112,7 +112,7 @@ export const exportData = async ({ userId, userEmail }: { userId: string; userEm
       });
 
       // Send email notification
-      await sendEmailNotification( {
+      await sendEmailNotification({
         from: '"Spendless" <noreply@yourapp.com>',
         to: userEmail,
         subject: 'Your data export is ready',

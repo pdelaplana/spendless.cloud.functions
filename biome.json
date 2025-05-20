@@ -32,8 +32,8 @@
   },
   "files": {
     "include": [
-      "**/*.js",
-      "**/*.ts"
+      "src/**/*.js",
+      "src/**/*.ts"
     ],
     "ignore": [
       "**/node_modules/**",
