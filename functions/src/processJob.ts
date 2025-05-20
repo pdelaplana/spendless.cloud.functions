@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/node';
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { deleteAccount } from './jobs/deleteAccount';
 import { exportData } from './jobs/exportData';
 import type { Job } from './types';
 
@@ -27,6 +28,9 @@ export const processJob = onDocumentCreated('jobs/{jobId}', async (event) => {
       switch (job.jobType) {
         case 'exportData':
           result = await exportData({ userId: job.userId, userEmail: job.userEmail });
+          break;
+        case 'deleteAccount':
+          result = await deleteAccount({ userId: job.userId, userEmail: job.userEmail });
           break;
         default:
           console.error(`Unknown job type: ${job.jobType}`);

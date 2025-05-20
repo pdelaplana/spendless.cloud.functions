@@ -1,6 +1,6 @@
 import type { Timestamp } from 'firebase-admin/firestore';
 
-export type JobType = 'exportData' | 'anotherJobType' | 'anotherJobType2';
+export type JobType = 'exportData' | 'deleteAccount' | 'anotherJobType' | 'anotherJobType2';
 
 export type Job = {
   userId: string;

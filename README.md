@@ -27,7 +27,7 @@ The QueueJob function enables asynchronous task processing within the Spendless 
 - Stores job metadata in Firestore with appropriate status flags
 - Returns a job ID for client-side tracking
 
-Supported job types include data exports, notification sending, and data processing operations. 
+Supported job types include data exports, notification sending, and data processing operations.
 
 ### ProcessJob
 
@@ -41,6 +41,18 @@ The ProcessJob function handles background execution of queued jobs. Triggered b
 
 The function supports various job implementations stored in the jobs/ directory, with the most common being data export operations.
 
+### DeleteAccount
+
+The DeleteAccount function provides a secure way for users to completely remove their accounts and all associated data. This HTTPS callable function:
+
+- Requires proper authentication to ensure only account owners can delete their data
+- Systematically removes user data from Firestore collections and subcollections
+- Deletes user files from Firebase Storage
+- Removes the user's authentication record from Firebase Auth
+- Sends a confirmation email upon successful deletion
+- Implements comprehensive error handling and logging
+
+This function follows data privacy best practices and ensures that users can exercise their "right to be forgotten" in compliance with privacy regulations.
 
 ## Project Structure
 
@@ -134,6 +146,7 @@ npm run deploy
 | Function | Type | Description |
 |----------|------|-------------|
 | `exportData` | HTTPS Callable | Allows users to export their data |
+| `deleteAccount` | HTTPS Callable | Permanently deletes a user account and all associated data |
 | `queueJob` | HTTPS Callable | Adds a job to the processing queue |
 | `processJob` | Firestore Trigger | Processes jobs from the queue |
 | `healthCheck` | HTTP Function | Monitors system health |
