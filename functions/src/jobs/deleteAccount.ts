@@ -1,7 +1,9 @@
 import Sentry from '@sentry/node';
 import admin from 'firebase-admin';
-import params from 'firebase-functions/params';
+import params, { defineString } from 'firebase-functions/params';
 import { sendEmailNotification } from '../helpers/sendEmail';
+
+export const storageBucket = defineString('STORAGE_BUCKET');
 
 export const deleteAccount = async ({
   userId,
@@ -48,9 +50,19 @@ export const deleteAccount = async ({
 
       // 5. Delete user's storage files
       try {
-        const defaultBucket = params.storageBucket.value() || admin.storage().bucket().name;
+        // Get storage bucket name from parameters or use default
+        let bucketName: string | undefined;
 
-        const bucket = admin.storage().bucket(defaultBucket);
+        try {
+          bucketName = storageBucket.value();
+        } catch (paramError) {
+          console.error('Storage bucket parameter not defined, using default bucket', paramError);
+          bucketName = undefined;
+        }
+
+        // Get the default bucket if no name specified
+        const bucket = bucketName ? admin.storage().bucket(bucketName) : admin.storage().bucket();
+
         await bucket.deleteFiles({
           prefix: `users/${userId}/`,
         });
