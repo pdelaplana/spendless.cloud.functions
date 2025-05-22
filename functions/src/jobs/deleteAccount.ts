@@ -1,5 +1,6 @@
 import Sentry from '@sentry/node';
 import admin from 'firebase-admin';
+import { params } from 'firebase-functions';
 import { sendEmailNotification } from '../helpers/sendEmail';
 
 export const deleteAccount = async ({
@@ -48,7 +49,9 @@ export const deleteAccount = async ({
       // 5. Delete user's storage files
       try {
         // Get storage bucket name from parameters or use default
-        const bucket = admin.storage().bucket();
+        const defaultBucket = params.storageBucket.value() || admin.storage().bucket().name;
+        console.log('Default bucket:', defaultBucket);
+        const bucket = admin.storage().bucket(defaultBucket);
 
         await bucket.deleteFiles({
           prefix: `users/${userId}/`,
