@@ -1,6 +1,5 @@
 import Sentry from '@sentry/node';
 import admin from 'firebase-admin';
-import params from 'firebase-functions/params';
 import { sendEmailNotification } from '../helpers/sendEmail';
 
 export const deleteAccount = async ({
