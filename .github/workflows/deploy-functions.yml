@@ -49,6 +49,23 @@ jobs:
           cd functions
           npm run biome:check
       
+      - name: Run unit tests
+        run: |
+          cd functions
+          npm test
+          
+      - name: Generate test coverage report
+        run: |
+          cd functions
+          npm run test:coverage
+          
+      - name: Archive test coverage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: functions/coverage/
+          retention-days: 14
+      
       - name: Create Firebase service account file
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > functions/spendless-firebase-adminsdk.json
@@ -56,8 +73,8 @@ jobs:
       - name: Create Environment file
         run: |
           echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" > functions/.env
-          echo "ENVIRONMENT=${{ github.event.inputs.environment }}" >> functions/.env
-          echo "DEBUG_MODE=${{ github.event.inputs.debug_mode }}" >> functions/.env
+          echo "ENVIRONMENT=${{ github.event.inputs.environment || 'production' }}" >> functions/.env
+          echo "DEBUG_MODE=${{ github.event.inputs.debug_mode || 'false' }}" >> functions/.env
           echo "MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}" >> functions/.env
           echo "MAILGUN_DOMAIN=${{ secrets.MAILGUN_DOMAIN }}" >> functions/.env
       
@@ -71,6 +88,4 @@ jobs:
         with:
           args: deploy --only functions
         env:
-          # GOOGLE_APPLICATION_CREDENTIALS: functions/spendless-firebase-adminsdk.json
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          

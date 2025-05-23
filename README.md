@@ -131,6 +131,22 @@ npm run serve
 npm run build:watch
 ```
 
+### Testing
+
+The project uses Jest for unit testing, with test files located in `src/__tests__/`.
+
+```powershell
+# Run all tests
+cd functions
+npm test
+
+# Run tests in watch mode during development
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+```
+
 ### Deployment
 
 ```powershell
