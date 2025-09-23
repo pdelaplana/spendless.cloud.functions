@@ -75,12 +75,27 @@ describe('deleteAccount job', () => {
       {
         ref: {
           delete: jest.fn().mockResolvedValue({}),
+          collection: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({
+              docs: [
+                { ref: { delete: jest.fn().mockResolvedValue({}) } },
+                { ref: { delete: jest.fn().mockResolvedValue({}) } },
+              ],
+            }),
+          }),
         },
         id: 'period1',
       },
       {
         ref: {
           delete: jest.fn().mockResolvedValue({}),
+          collection: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({
+              docs: [
+                { ref: { delete: jest.fn().mockResolvedValue({}) } },
+              ],
+            }),
+          }),
         },
         id: 'period2',
       },
@@ -143,6 +158,10 @@ describe('deleteAccount job', () => {
     expect(mockAccountDocRef.collection).toHaveBeenCalledWith('periods');
     expect(mockAccountDocRef.collection).toHaveBeenCalledWith('spending');
 
+    // Verify wallet subcollections were accessed
+    expect(mockPeriodsSnapshot.docs[0].ref.collection).toHaveBeenCalledWith('wallets');
+    expect(mockPeriodsSnapshot.docs[1].ref.collection).toHaveBeenCalledWith('wallets');
+
     // Verify document deletion operations
     expect(mockPeriodsSnapshot.docs[0].ref.delete).toHaveBeenCalled();
     expect(mockPeriodsSnapshot.docs[1].ref.delete).toHaveBeenCalled();
@@ -202,6 +221,11 @@ describe('deleteAccount job', () => {
     (admin.storage().bucket().deleteFiles as jest.Mock).mockRejectedValue(
       new Error('Storage error'),
     );
+
+    // Ensure all other mocks are properly set up for this test
+    mockAccountDocRef.get.mockResolvedValue(mockAccountSnapshot);
+    mockPeriodsCollection.get.mockResolvedValue(mockPeriodsSnapshot);
+    mockSpendingCollection.get.mockResolvedValue(mockSpendingSnapshot);
 
     // Call the function
     const result = await deleteAccount({ userId: 'user1', userEmail: 'user@example.com' });
