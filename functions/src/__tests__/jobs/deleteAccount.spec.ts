@@ -91,9 +91,7 @@ describe('deleteAccount job', () => {
           delete: jest.fn().mockResolvedValue({}),
           collection: jest.fn().mockReturnValue({
             get: jest.fn().mockResolvedValue({
-              docs: [
-                { ref: { delete: jest.fn().mockResolvedValue({}) } },
-              ],
+              docs: [{ ref: { delete: jest.fn().mockResolvedValue({}) } }],
             }),
           }),
         },
