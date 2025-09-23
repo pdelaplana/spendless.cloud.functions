@@ -26,27 +26,37 @@ export const deleteAccount = async ({
       // Delete subcollections first (periods and spending)
       // Note: Firestore doesn't automatically delete subcollections when a document is deleted
 
-      // 1. Delete periods subcollection
+      // 1. First get all periods to delete their wallets subcollections
       const periodsSnapshot = await accountRef.collection('periods').get();
+
+      // Delete wallets subcollection for each period
+      const deleteWalletPromises = periodsSnapshot.docs.map(async (periodDoc) => {
+        const walletsSnapshot = await periodDoc.ref.collection('wallets').get();
+        const walletDeletions = walletsSnapshot.docs.map((walletDoc) => walletDoc.ref.delete());
+        await Promise.all(walletDeletions);
+      });
+      await Promise.all(deleteWalletPromises);
+
+      // 2. Delete periods subcollection
       const deletePeriodPromises = periodsSnapshot.docs.map(async (doc) => {
         await doc.ref.delete();
       });
       await Promise.all(deletePeriodPromises);
 
-      // 2. Delete spending subcollection
+      // 3. Delete spending subcollection
       const spendingSnapshot = await accountRef.collection('spending').get();
       const deleteSpendingPromises = spendingSnapshot.docs.map(async (doc) => {
         await doc.ref.delete();
       });
       await Promise.all(deleteSpendingPromises);
 
-      // 3. Delete the main account document
+      // 4. Delete the main account document
       await accountRef.delete();
 
-      // 4. Delete user from Firebase Authentication
+      // 5. Delete user from Firebase Authentication
       await admin.auth().deleteUser(userId);
 
-      // 5. Delete user's storage files
+      // 6. Delete user's storage files
       try {
         // Get storage bucket name from parameters or use default
         const defaultBucket = params.storageBucket.value() || admin.storage().bucket().name;
