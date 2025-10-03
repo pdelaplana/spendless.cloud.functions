@@ -24,6 +24,7 @@ function extractFirstName(displayName: string | null | undefined): string {
  * @returns Object with subject and body from the template
  */
 function loadEmailTemplate(): { subject: string; body: string } {
+  // Templates are copied to lib/templates during build
   const templatePath = path.join(__dirname, 'templates', 'emails', 'welcome-email.md');
   const templateContent = fs.readFileSync(templatePath, 'utf-8');
 
