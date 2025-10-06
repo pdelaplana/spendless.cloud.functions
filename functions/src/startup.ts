@@ -19,6 +19,7 @@ try {
   if (fs.existsSync('./spendless-firebase-adminsdk.json')) {
     admin.initializeApp({
       credential: admin.credential.cert('./spendless-firebase-adminsdk.json'),
+      storageBucket: 'spendless-dev-15971.firebasestorage.app',
     });
   } else {
     // Default initialization for production environment
