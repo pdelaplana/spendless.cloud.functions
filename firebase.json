@@ -15,7 +15,6 @@
         "**/__tests__",
         "*.spec.ts",
         "*.spec.js",
-        "tsconfig.json",
         ".gitignore"
       ],
       "predeploy": [
