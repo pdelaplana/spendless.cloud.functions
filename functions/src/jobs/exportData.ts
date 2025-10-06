@@ -3,7 +3,6 @@ import os from 'node:os';
 import path from 'node:path';
 import Sentry from '@sentry/node';
 import admin from 'firebase-admin';
-import params from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import { parse } from 'json2csv';
@@ -92,7 +91,8 @@ export const exportData = async ({ userId, userEmail }: { userId: string; userEm
       fs.writeFileSync(tempFilePath, csv);
 
       // Upload to Firebase Storage
-      const defaultBucket = params.storageBucket.value() || admin.storage().bucket().name;
+      const defaultBucket = process.env.STORAGE_BUCKET || 'spendless-dev-15971.firebasestorage.app';
+      console.log('Using storage bucket:', defaultBucket);
       const bucket = admin.storage().bucket(defaultBucket);
       const storageFilePath = `users/${userId}/exports/spending-${timestamp}.csv`;
 
