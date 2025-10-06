@@ -122,7 +122,7 @@ jobs:
       - name: Build functions
         run: |
           cd functions
-          npm run build
+          npm run build:templates
 
       - name: Deploy to Firebase
         env:
