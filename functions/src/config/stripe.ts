@@ -25,16 +25,49 @@ const getStripeSecretKey = (): string => {
 };
 
 /**
- * Stripe client instance configured with the API key.
- * Uses the latest API version and includes app info for debugging.
+ * Lazy-initialized Stripe client instance.
+ * This is initialized on first use to avoid errors during deployment analysis.
  */
-export const stripe = new Stripe(getStripeSecretKey(), {
-  apiVersion: '2025-02-24.acacia',
-  appInfo: {
-    name: 'Spendless Cloud Functions',
-    version: '1.0.0',
+let stripeClient: Stripe | null = null;
+
+/**
+ * Get the Stripe client instance, initializing it if necessary.
+ * Uses lazy initialization to avoid errors during deployment analysis.
+ */
+export const getStripe = (): Stripe => {
+  if (!stripeClient) {
+    stripeClient = new Stripe(getStripeSecretKey(), {
+      apiVersion: '2025-02-24.acacia',
+      appInfo: {
+        name: 'Spendless Cloud Functions',
+        version: '1.0.0',
+      },
+    });
+  }
+  return stripeClient;
+};
+
+/**
+ * Legacy export for backwards compatibility.
+ * @deprecated Use getStripe() instead for lazy initialization.
+ */
+export const stripe = {
+  get checkout() {
+    return getStripe().checkout;
   },
-});
+  get billingPortal() {
+    return getStripe().billingPortal;
+  },
+  get customers() {
+    return getStripe().customers;
+  },
+  get subscriptions() {
+    return getStripe().subscriptions;
+  },
+  get webhooks() {
+    return getStripe().webhooks;
+  },
+};
 
 /**
  * Get the Stripe webhook secret for signature verification.
