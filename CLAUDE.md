@@ -32,6 +32,9 @@ npm run shell             # Interactive shell for testing functions
 
 # Deployment
 npm run deploy            # Deploy to Firebase (use with caution)
+
+# Configuration (Windows)
+.\scripts\configure-stripe.ps1  # Configure Stripe for dev/prod environments
 ```
 
 ## Architecture
@@ -278,6 +281,29 @@ firebase functions:config:set \
   stripe.price_id_monthly="price_..." \
   stripe.price_id_annual="price_..."
 ```
+
+**Configuration Script** (Windows PowerShell):
+
+A PowerShell script is available to streamline configuration for both dev and prod environments:
+
+```powershell
+# Configure both environments
+.\functions\scripts\configure-stripe.ps1
+
+# Configure only dev
+.\functions\scripts\configure-stripe.ps1 -Environment dev
+
+# Configure only prod
+.\functions\scripts\configure-stripe.ps1 -Environment prod
+```
+
+The script will:
+- Prompt for Stripe credentials for each environment
+- Switch to the correct Firebase project
+- Set Firebase Functions config
+- Provide next steps for webhook configuration
+
+See `functions/scripts/README.md` for detailed usage instructions.
 
 ### Stripe Firestore Schema
 
