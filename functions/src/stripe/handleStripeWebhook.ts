@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
 import type Stripe from 'stripe';
 import { getWebhookSecret, stripe } from '../config/stripe';
+import type { StripeInvoiceExtended } from '../types';
 import {
   downgradeToEssentials,
   getAccountIdFromStripeCustomer,
@@ -160,15 +161,17 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
 async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
   console.log(`Processing payment succeeded: ${invoice.id}`);
 
+  const invoiceExt = invoice as Stripe.Invoice & StripeInvoiceExtended;
+
   // Only process if this invoice is for a subscription
-  if (!(invoice as any).subscription) {
+  if (!invoiceExt.subscription) {
     console.log('Invoice is not for a subscription, skipping');
     return;
   }
 
   try {
     // Retrieve the subscription to get updated information
-    const subscription = await stripe.subscriptions.retrieve((invoice as any).subscription as string);
+    const subscription = await stripe.subscriptions.retrieve(invoiceExt.subscription as string);
     const accountId = await getAccountIdFromStripeCustomer(subscription.customer as string);
 
     // Update subscription with new period end date
@@ -195,14 +198,16 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
 async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
   console.log(`Processing payment failed: ${invoice.id}`);
 
+  const invoiceExt = invoice as Stripe.Invoice & StripeInvoiceExtended;
+
   // Only process if this invoice is for a subscription
-  if (!(invoice as any).subscription) {
+  if (!invoiceExt.subscription) {
     console.log('Invoice is not for a subscription, skipping');
     return;
   }
 
   try {
-    const subscription = await stripe.subscriptions.retrieve((invoice as any).subscription as string);
+    const subscription = await stripe.subscriptions.retrieve(invoiceExt.subscription as string);
     const accountId = await getAccountIdFromStripeCustomer(subscription.customer as string);
 
     // Update subscription status and record payment failure

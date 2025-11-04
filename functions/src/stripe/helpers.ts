@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin';
 import type Stripe from 'stripe';
 import { stripe } from '../config/stripe';
-import type { Account, StripeSubscriptionStatus } from '../types';
+import type { Account, StripeSubscriptionExtended, StripeSubscriptionStatus } from '../types';
 
 /**
  * Get or create a Stripe customer for a given user.
@@ -144,8 +144,9 @@ export async function updateAccountSubscription(
   if (subscription.status === 'active' || subscription.status === 'trialing') {
     updateData.subscriptionTier = 'premium';
     // Set expiration date to the end of the current period
+    const subscriptionExt = subscription as Stripe.Subscription & StripeSubscriptionExtended;
     updateData.expiresAt = admin.firestore.Timestamp.fromMillis(
-      (subscription as any).current_period_end * 1000,
+      subscriptionExt.current_period_end * 1000,
     );
   } else if (
     subscription.status === 'canceled' ||
@@ -157,8 +158,9 @@ export async function updateAccountSubscription(
   } else if (subscription.status === 'past_due') {
     // Keep as premium during payment retry period
     updateData.subscriptionTier = 'premium';
+    const subscriptionExt = subscription as Stripe.Subscription & StripeSubscriptionExtended;
     updateData.expiresAt = admin.firestore.Timestamp.fromMillis(
-      (subscription as any).current_period_end * 1000,
+      subscriptionExt.current_period_end * 1000,
     );
     updateData.lastPaymentFailedAt = admin.firestore.Timestamp.now();
   }

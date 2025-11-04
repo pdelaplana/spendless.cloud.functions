@@ -71,3 +71,12 @@ export type StripeWebhookEventType =
   | 'customer.subscription.deleted'
   | 'invoice.payment_succeeded'
   | 'invoice.payment_failed';
+
+// Extended Stripe types for properties not in current type definitions
+export interface StripeSubscriptionExtended {
+  current_period_end: number;
+}
+
+export interface StripeInvoiceExtended {
+  subscription: string | null;
+}
