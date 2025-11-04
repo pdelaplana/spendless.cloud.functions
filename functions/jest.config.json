@@ -7,6 +7,10 @@
   "testMatch": [
     "**/__tests__/**/*.spec.ts"
   ],
+  "testPathIgnorePatterns": [
+    "/node_modules/",
+    "/__tests__/stripe/"
+  ],
   "moduleFileExtensions": [
     "ts",
     "js",
