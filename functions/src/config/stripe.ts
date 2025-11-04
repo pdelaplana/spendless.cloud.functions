@@ -29,7 +29,7 @@ const getStripeSecretKey = (): string => {
  * Uses the latest API version and includes app info for debugging.
  */
 export const stripe = new Stripe(getStripeSecretKey(), {
-  apiVersion: '2025-10-29.clover',
+  apiVersion: '2025-02-24.acacia',
   appInfo: {
     name: 'Spendless Cloud Functions',
     version: '1.0.0',

@@ -31,7 +31,8 @@
     "firebase-functions": "^6.0.1",
     "json2csv": "^6.0.0-alpha.2",
     "nodemailer": "^7.0.3",
-    "nodemailer-mailgun-transport": "^2.1.5"
+    "nodemailer-mailgun-transport": "^2.1.5",
+    "stripe": "^17.5.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
