@@ -118,11 +118,15 @@ jobs:
           echo "DATABASE_ID=${{ env.DATABASE_ID }}" >> functions/.env
           echo "STORAGE_BUCKET=${{ env.STORAGE_BUCKET }}" >> functions/.env
           echo "PROJECT_ID=${{ env.FIREBASE_PROJECT_ID }}" >> functions/.env
+          echo "STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}" >> functions/.env
+          echo "STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}" >> functions/.env
+          echo "STRIPE_PRICE_ID_MONTHLY=${{ secrets.STRIPE_PRICE_ID_MONTHLY }}" >> functions/.env
+          echo "STRIPE_PRICE_ID_ANNUAL=${{ secrets.STRIPE_PRICE_ID_ANNUAL }}" >> functions/.env
 
       - name: Build functions
         run: |
           cd functions
-          npm run build:templates
+          npm run build
 
       - name: Deploy to Firebase
         env:
