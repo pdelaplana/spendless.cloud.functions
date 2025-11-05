@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/node';
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
 import type Stripe from 'stripe';
-import { getWebhookSecret, stripe } from '../config/stripe';
+import { getWebhookSecret, stripe, stripeSecretKey, stripeWebhookSecret } from '../config/stripe';
 import type { StripeInvoiceExtended } from '../types';
 import {
   downgradeToEssentials,
@@ -24,84 +24,91 @@ import {
  * - invoice.payment_succeeded
  * - invoice.payment_failed
  */
-export const handleStripeWebhook = functions.https.onRequest(async (request, response) => {
-  return Sentry.startSpan(
-    {
-      name: 'handleStripeWebhook',
-      op: 'function.https.request',
-    },
-    async () => {
-      // Only accept POST requests
-      if (request.method !== 'POST') {
-        response.status(405).send('Method Not Allowed');
-        return;
-      }
-
-      const sig = request.headers['stripe-signature'];
-
-      if (!sig) {
-        console.error('Missing Stripe signature header');
-        response.status(400).send('Missing Stripe signature');
-        return;
-      }
-
-      let event: Stripe.Event;
-
-      try {
-        // Verify webhook signature using the raw body
-        const webhookSecret = getWebhookSecret();
-        event = stripe.webhooks.constructEvent(request.rawBody, sig, webhookSecret);
-      } catch (error) {
-        console.error('Webhook signature verification failed:', error);
-        Sentry.captureException(error);
-        response
-          .status(400)
-          .send(`Webhook Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        return;
-      }
-
-      // Log the event for debugging
-      console.log(`Received webhook event: ${event.type}`, { eventId: event.id });
-
-      try {
-        // Route event to appropriate handler
-        switch (event.type) {
-          case 'customer.subscription.created':
-            await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
-            break;
-
-          case 'customer.subscription.updated':
-            await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
-            break;
-
-          case 'customer.subscription.deleted':
-            await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
-            break;
-
-          case 'invoice.payment_succeeded':
-            await handlePaymentSucceeded(event.data.object as Stripe.Invoice);
-            break;
-
-          case 'invoice.payment_failed':
-            await handlePaymentFailed(event.data.object as Stripe.Invoice);
-            break;
-
-          default:
-            console.log(`Unhandled event type: ${event.type}`);
+export const handleStripeWebhook = functions.https.onRequest(
+  {
+    secrets: [stripeSecretKey, stripeWebhookSecret],
+  },
+  async (request, response) => {
+    return Sentry.startSpan(
+      {
+        name: 'handleStripeWebhook',
+        op: 'function.https.request',
+      },
+      async () => {
+        // Only accept POST requests
+        if (request.method !== 'POST') {
+          response.status(405).send('Method Not Allowed');
+          return;
         }
 
-        // Acknowledge receipt of the event
-        response.status(200).json({ received: true });
-      } catch (error) {
-        console.error('Error processing webhook event:', error);
-        Sentry.captureException(error);
-        // Still return 200 to prevent Stripe from retrying
-        // (we've already logged the error to Sentry for investigation)
-        response.status(200).json({ received: true, error: 'Processing failed but acknowledged' });
-      }
-    },
-  );
-});
+        const sig = request.headers['stripe-signature'];
+
+        if (!sig) {
+          console.error('Missing Stripe signature header');
+          response.status(400).send('Missing Stripe signature');
+          return;
+        }
+
+        let event: Stripe.Event;
+
+        try {
+          // Verify webhook signature using the raw body
+          const webhookSecret = getWebhookSecret();
+          event = stripe.webhooks.constructEvent(request.rawBody, sig, webhookSecret);
+        } catch (error) {
+          console.error('Webhook signature verification failed:', error);
+          Sentry.captureException(error);
+          response
+            .status(400)
+            .send(`Webhook Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          return;
+        }
+
+        // Log the event for debugging
+        console.log(`Received webhook event: ${event.type}`, { eventId: event.id });
+
+        try {
+          // Route event to appropriate handler
+          switch (event.type) {
+            case 'customer.subscription.created':
+              await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+              break;
+
+            case 'customer.subscription.updated':
+              await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+              break;
+
+            case 'customer.subscription.deleted':
+              await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+              break;
+
+            case 'invoice.payment_succeeded':
+              await handlePaymentSucceeded(event.data.object as Stripe.Invoice);
+              break;
+
+            case 'invoice.payment_failed':
+              await handlePaymentFailed(event.data.object as Stripe.Invoice);
+              break;
+
+            default:
+              console.log(`Unhandled event type: ${event.type}`);
+          }
+
+          // Acknowledge receipt of the event
+          response.status(200).json({ received: true });
+        } catch (error) {
+          console.error('Error processing webhook event:', error);
+          Sentry.captureException(error);
+          // Still return 200 to prevent Stripe from retrying
+          // (we've already logged the error to Sentry for investigation)
+          response
+            .status(200)
+            .json({ received: true, error: 'Processing failed but acknowledged' });
+        }
+      },
+    );
+  },
+);
 
 /**
  * Handle customer.subscription.created event.

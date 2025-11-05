@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/node';
 import * as functions from 'firebase-functions/v2';
-import { isValidPriceId, stripe } from '../config/stripe';
+import { isValidPriceId, stripe, stripeSecretKey } from '../config/stripe';
 import type { CreateCheckoutSessionRequest, CreateCheckoutSessionResponse } from '../types';
 import { getAccountIdByUserId, getOrCreateStripeCustomer, hasActiveSubscription } from './helpers';
 
@@ -12,6 +12,9 @@ import { getAccountIdByUserId, getOrCreateStripeCustomer, hasActiveSubscription 
  * @returns sessionId and checkout URL
  */
 export const createCheckoutSession = functions.https.onCall(
+  {
+    secrets: [stripeSecretKey],
+  },
   async (request): Promise<CreateCheckoutSessionResponse> => {
     return Sentry.startSpan(
       {

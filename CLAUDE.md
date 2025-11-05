@@ -266,44 +266,66 @@ Located in `stripe/helpers.ts`:
 
 ### Stripe Environment Variables
 
-Required for local development (add to `functions/.env`):
-- `STRIPE_SECRET_KEY` - Stripe API secret key
-- `STRIPE_WEBHOOK_SECRET` - Stripe webhook signing secret
-- `STRIPE_PRICE_ID_MONTHLY` - Monthly subscription price ID
-- `STRIPE_PRICE_ID_ANNUAL` - Annual subscription price ID
-- `FRONTEND_URL` - Frontend URL for redirects (optional, defaults to localhost:8100)
+**Firebase Functions v2 Configuration**
 
-For production, configure via Firebase Functions config:
+This project uses Firebase Functions v2, which requires environment variables and Cloud Secret Manager instead of the deprecated `functions.config()` API.
+
+**Local Development** (add to `functions/.env`):
 ```bash
-firebase functions:config:set \
-  stripe.secret_key="sk_live_..." \
-  stripe.webhook_secret="whsec_..." \
-  stripe.price_id_monthly="price_..." \
-  stripe.price_id_annual="price_..."
+# Stripe Configuration
+STRIPE_SECRET_KEY="sk_test_..."
+STRIPE_WEBHOOK_SECRET="whsec_..."
+STRIPE_PRICE_ID_MONTHLY="price_..."
+STRIPE_PRICE_ID_ANNUAL="price_..."
+
+# Frontend URL for redirects (optional, defaults to localhost:8100)
+FRONTEND_URL="http://localhost:8100"
 ```
 
-**Configuration Script** (Windows PowerShell):
+**Production Deployment**:
 
-A PowerShell script is available to streamline configuration for both dev and prod environments:
+For production, you must migrate from the deprecated `functions:config` to Cloud Secret Manager:
+
+1. **Set secrets using Cloud Secret Manager** (recommended for sensitive data):
+```bash
+# Set secret key (will prompt for value)
+firebase functions:secrets:set STRIPE_SECRET_KEY --project your-project-id
+
+# Set webhook secret (will prompt for value)
+firebase functions:secrets:set STRIPE_WEBHOOK_SECRET --project your-project-id
+```
+
+2. **Set environment variables** for non-sensitive data (price IDs):
+```bash
+# Via .env.<project-id> file
+echo "STRIPE_PRICE_ID_MONTHLY=price_..." >> functions/.env.your-project-id
+echo "STRIPE_PRICE_ID_ANNUAL=price_..." >> functions/.env.your-project-id
+```
+
+Or set via Firebase Console: Functions > Configuration > Environment Variables
+
+**Migration Script** (Windows PowerShell):
+
+A PowerShell script is available to migrate from the deprecated `functions:config` to v2 secrets:
 
 ```powershell
-# Configure both environments
-.\functions\scripts\configure-stripe.ps1
+# Migrate both dev and production environments
+.\functions\scripts\migrate-to-v2-secrets.ps1
 
-# Configure only dev
-.\functions\scripts\configure-stripe.ps1 -Environment dev
+# Migrate only dev
+.\functions\scripts\migrate-to-v2-secrets.ps1 -Environment dev
 
-# Configure only prod
-.\functions\scripts\configure-stripe.ps1 -Environment prod
+# Migrate only prod
+.\functions\scripts\migrate-to-v2-secrets.ps1 -Environment prod
 ```
 
 The script will:
-- Prompt for Stripe credentials for each environment
-- Switch to the correct Firebase project
-- Set Firebase Functions config
-- Provide next steps for webhook configuration
+- Read existing configuration from `functions:config`
+- Migrate secrets to Cloud Secret Manager
+- Provide instructions for setting environment variables
+- Display next steps for cleanup
 
-See `functions/scripts/README.md` for detailed usage instructions.
+**⚠️ Important**: The old `functions:config` API will be shut down on December 31, 2025. You must migrate before then.
 
 ### Stripe Firestore Schema
 

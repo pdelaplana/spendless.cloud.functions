@@ -1,27 +1,31 @@
-import * as functions from 'firebase-functions';
+import { defineSecret, defineString } from 'firebase-functions/params';
 import Stripe from 'stripe';
 
 /**
- * Initialize Stripe SDK with the secret key from environment variables.
- *
+ * Define Stripe configuration parameters using Firebase Functions v2 params API.
+ * These can be set via environment variables (.env for local, Cloud Console for production)
+ * or Cloud Secret Manager for sensitive values.
+ */
+export const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
+export const stripeWebhookSecret = defineSecret('STRIPE_WEBHOOK_SECRET');
+export const stripePriceIdMonthly = defineString('STRIPE_PRICE_ID_MONTHLY');
+export const stripePriceIdAnnual = defineString('STRIPE_PRICE_ID_ANNUAL');
+
+/**
+ * Get the Stripe secret key from environment variables.
  * For local development: Uses STRIPE_SECRET_KEY from .env file
- * For production: Uses stripe.secret_key from Firebase Functions config
+ * For production: Uses STRIPE_SECRET_KEY from Cloud Secret Manager or environment variables
  */
 const getStripeSecretKey = (): string => {
-  // Try environment variable first (local development)
-  if (process.env.STRIPE_SECRET_KEY) {
-    return process.env.STRIPE_SECRET_KEY;
+  const key = stripeSecretKey.value();
+
+  if (!key) {
+    throw new Error(
+      'Stripe secret key not configured. Set STRIPE_SECRET_KEY environment variable.',
+    );
   }
 
-  // Fall back to Firebase Functions config (production)
-  const config = functions.config();
-  if (config.stripe?.secret_key) {
-    return config.stripe.secret_key;
-  }
-
-  throw new Error(
-    'Stripe secret key not configured. Set STRIPE_SECRET_KEY environment variable or configure Firebase Functions config.',
-  );
+  return key;
 };
 
 /**
@@ -73,60 +77,45 @@ export const stripe = {
  * Get the Stripe webhook secret for signature verification.
  */
 export const getWebhookSecret = (): string => {
-  // Try environment variable first (local development)
-  if (process.env.STRIPE_WEBHOOK_SECRET) {
-    return process.env.STRIPE_WEBHOOK_SECRET;
+  const secret = stripeWebhookSecret.value();
+
+  if (!secret) {
+    throw new Error(
+      'Stripe webhook secret not configured. Set STRIPE_WEBHOOK_SECRET environment variable.',
+    );
   }
 
-  // Fall back to Firebase Functions config (production)
-  const config = functions.config();
-  if (config.stripe?.webhook_secret) {
-    return config.stripe.webhook_secret;
-  }
-
-  throw new Error(
-    'Stripe webhook secret not configured. Set STRIPE_WEBHOOK_SECRET environment variable or configure Firebase Functions config.',
-  );
+  return secret;
 };
 
 /**
  * Get the monthly subscription price ID.
  */
 export const getMonthlyPriceId = (): string => {
-  // Try environment variable first (local development)
-  if (process.env.STRIPE_PRICE_ID_MONTHLY) {
-    return process.env.STRIPE_PRICE_ID_MONTHLY;
+  const priceId = stripePriceIdMonthly.value();
+
+  if (!priceId) {
+    throw new Error(
+      'Stripe monthly price ID not configured. Set STRIPE_PRICE_ID_MONTHLY environment variable.',
+    );
   }
 
-  // Fall back to Firebase Functions config (production)
-  const config = functions.config();
-  if (config.stripe?.price_id_monthly) {
-    return config.stripe.price_id_monthly;
-  }
-
-  throw new Error(
-    'Stripe monthly price ID not configured. Set STRIPE_PRICE_ID_MONTHLY environment variable or configure Firebase Functions config.',
-  );
+  return priceId;
 };
 
 /**
  * Get the annual subscription price ID.
  */
 export const getAnnualPriceId = (): string => {
-  // Try environment variable first (local development)
-  if (process.env.STRIPE_PRICE_ID_ANNUAL) {
-    return process.env.STRIPE_PRICE_ID_ANNUAL;
+  const priceId = stripePriceIdAnnual.value();
+
+  if (!priceId) {
+    throw new Error(
+      'Stripe annual price ID not configured. Set STRIPE_PRICE_ID_ANNUAL environment variable.',
+    );
   }
 
-  // Fall back to Firebase Functions config (production)
-  const config = functions.config();
-  if (config.stripe?.price_id_annual) {
-    return config.stripe.price_id_annual;
-  }
-
-  throw new Error(
-    'Stripe annual price ID not configured. Set STRIPE_PRICE_ID_ANNUAL environment variable or configure Firebase Functions config.',
-  );
+  return priceId;
 };
 
 /**

@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/node';
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
-import { stripe } from '../config/stripe';
+import { stripe, stripeSecretKey } from '../config/stripe';
 import type {
   Account,
   CreateCustomerPortalSessionRequest,
@@ -18,6 +18,9 @@ import { getAccountIdByUserId } from './helpers';
  * @returns Customer Portal URL
  */
 export const createCustomerPortalSession = functions.https.onCall(
+  {
+    secrets: [stripeSecretKey],
+  },
   async (request): Promise<CreateCustomerPortalSessionResponse> => {
     return Sentry.startSpan(
       {
