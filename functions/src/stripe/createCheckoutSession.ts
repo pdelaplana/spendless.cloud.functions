@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/node';
 import * as functions from 'firebase-functions/v2';
 import { isValidPriceId, stripe, stripeSecretKey } from '../config/stripe';
 import type { CreateCheckoutSessionRequest, CreateCheckoutSessionResponse } from '../types';
-import { getAccountIdByUserId, getOrCreateStripeCustomer, hasActiveSubscription } from './helpers';
+import { getOrCreateStripeCustomer, hasActiveSubscription } from './helpers';
 
 /**
  * Firebase HTTPS Callable Function to create a Stripe Checkout Session.
@@ -53,8 +53,9 @@ export const createCheckoutSession = functions.https.onCall(
         }
 
         try {
-          // Get the account ID for this user
-          const accountId = await getAccountIdByUserId(userId);
+          // Use userId directly as accountId (they are the same)
+          const accountId = userId;
+          console.log('Creating checkout session for account:', accountId, userEmail);
 
           // Check if user already has an active subscription
           const hasActive = await hasActiveSubscription(accountId);

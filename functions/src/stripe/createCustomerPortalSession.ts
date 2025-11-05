@@ -7,7 +7,6 @@ import type {
   CreateCustomerPortalSessionRequest,
   CreateCustomerPortalSessionResponse,
 } from '../types';
-import { getAccountIdByUserId } from './helpers';
 
 /**
  * Firebase HTTPS Callable Function to create a Stripe Customer Portal Session.
@@ -43,8 +42,8 @@ export const createCustomerPortalSession = functions.https.onCall(
         }
 
         try {
-          // Get the account ID for this user
-          const accountId = await getAccountIdByUserId(userId);
+          // Use userId directly as accountId (they are the same)
+          const accountId = userId;
 
           // Get the account document to retrieve the Stripe customer ID
           const db = admin.firestore();

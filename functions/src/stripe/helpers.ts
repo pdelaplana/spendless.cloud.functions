@@ -63,6 +63,9 @@ export async function getOrCreateStripeCustomer(
 /**
  * Get the account ID from a Firestore query by user ID.
  *
+ * @deprecated This function is no longer needed since userId is the same as accountId.
+ * Use userId directly as the account document ID instead.
+ *
  * @param userId - The Firebase Auth user ID
  * @returns The account document ID
  * @throws Error if no account is found
