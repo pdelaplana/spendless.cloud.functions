@@ -118,10 +118,19 @@ jobs:
           echo "DATABASE_ID=${{ env.DATABASE_ID }}" >> functions/.env
           echo "STORAGE_BUCKET=${{ env.STORAGE_BUCKET }}" >> functions/.env
           echo "PROJECT_ID=${{ env.FIREBASE_PROJECT_ID }}" >> functions/.env
-          echo "STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}" >> functions/.env
-          echo "STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}" >> functions/.env
+          # Stripe price IDs (non-sensitive, can be env vars)
           echo "STRIPE_PRICE_ID_MONTHLY=${{ secrets.STRIPE_PRICE_ID_MONTHLY }}" >> functions/.env
           echo "STRIPE_PRICE_ID_ANNUAL=${{ secrets.STRIPE_PRICE_ID_ANNUAL }}" >> functions/.env
+          # NOTE: STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are NOT written to .env
+          # They come from Cloud Secret Manager via defineSecret() in the code
+
+      - name: Ensure Stripe secrets exist in Secret Manager
+        run: |
+          cd functions
+          # Create or update STRIPE_SECRET_KEY secret
+          echo "${{ secrets.STRIPE_SECRET_KEY }}" | npx firebase functions:secrets:set STRIPE_SECRET_KEY --project ${{ env.FIREBASE_PROJECT_ID }} --force || true
+          # Create or update STRIPE_WEBHOOK_SECRET secret
+          echo "${{ secrets.STRIPE_WEBHOOK_SECRET }}" | npx firebase functions:secrets:set STRIPE_WEBHOOK_SECRET --project ${{ env.FIREBASE_PROJECT_ID }} --force || true
 
       - name: Build functions
         run: |
