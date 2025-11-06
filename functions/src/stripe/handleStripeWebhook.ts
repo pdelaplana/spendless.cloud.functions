@@ -3,12 +3,8 @@ import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
 import type Stripe from 'stripe';
 import { getWebhookSecret, stripe, stripeSecretKey, stripeWebhookSecret } from '../config/stripe';
-import type { StripeInvoiceExtended } from '../types';
-import {
-  downgradeToEssentials,
-  getAccountIdFromStripeCustomer,
-  updateAccountSubscription,
-} from './helpers';
+import type { Account } from '../types';
+import { downgradeToEssentials } from './helpers';
 
 /**
  * Firebase HTTP Function to handle Stripe webhook events.
@@ -116,11 +112,71 @@ export const handleStripeWebhook = functions.https.onRequest(
  */
 async function handleSubscriptionCreated(subscription: Stripe.Subscription): Promise<void> {
   console.log(`Processing subscription created: ${subscription.id}`);
+  console.log('Subscription details:', {
+    id: subscription.id,
+    customer: subscription.customer,
+    status: subscription.status,
+    current_period_end: subscription.current_period_end,
+    created: subscription.created,
+  });
 
   try {
-    const accountId = await getAccountIdFromStripeCustomer(subscription.customer as string);
-    await updateAccountSubscription(accountId, subscription);
-    console.log(`Successfully processed subscription created for account ${accountId}`);
+    const customerId = subscription.customer as string;
+    const db = admin.firestore();
+
+    // Find account by stripeCustomerId
+    const accountsSnapshot = await db
+      .collection('accounts')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+
+    if (accountsSnapshot.empty) {
+      console.warn(`No account found for Stripe customer ${customerId}`);
+      return;
+    }
+
+    const accountDoc = accountsSnapshot.docs[0];
+    const accountId = accountDoc.id;
+    const accountData = accountDoc.data() as Account;
+
+    // Check event ordering - only process if this event is newer
+    if (
+      accountData.stripeSubscriptionLastEvent &&
+      subscription.created <= accountData.stripeSubscriptionLastEvent
+    ) {
+      console.log(
+        `Discarding older subscription.created event (${subscription.created} <= ${accountData.stripeSubscriptionLastEvent})`,
+      );
+      return;
+    }
+
+    // Determine tier and expiration based on status
+    let subscriptionTier: 'premium' | 'essentials' = 'essentials';
+    let expiresAt: admin.firestore.Timestamp | null = null;
+
+    if (subscription.status === 'active' || subscription.status === 'trialing') {
+      subscriptionTier = 'premium';
+      if (subscription.current_period_end) {
+        expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+      }
+    }
+
+    // Update account with subscription data
+    await db.collection('accounts').doc(accountId).update({
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscription.id,
+      stripeSubscriptionStatus: subscription.status,
+      stripeSubscriptionEnds: subscription.current_period_end,
+      stripeSubscriptionLastEvent: subscription.created,
+      subscriptionTier,
+      expiresAt,
+      updatedAt: admin.firestore.Timestamp.now(),
+    });
+
+    console.log(
+      `Successfully processed subscription.created for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
+    );
   } catch (error) {
     console.error('Error handling subscription created:', error);
     throw error;
@@ -133,11 +189,71 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription): Pro
  */
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
   console.log(`Processing subscription updated: ${subscription.id}`);
+  console.log('Subscription details:', {
+    id: subscription.id,
+    customer: subscription.customer,
+    status: subscription.status,
+    current_period_end: subscription.current_period_end,
+    created: subscription.created,
+  });
 
   try {
-    const accountId = await getAccountIdFromStripeCustomer(subscription.customer as string);
-    await updateAccountSubscription(accountId, subscription);
-    console.log(`Successfully processed subscription updated for account ${accountId}`);
+    const customerId = subscription.customer as string;
+    const db = admin.firestore();
+
+    // Find account by stripeCustomerId
+    const accountsSnapshot = await db
+      .collection('accounts')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+
+    if (accountsSnapshot.empty) {
+      console.warn(`No account found for Stripe customer ${customerId}`);
+      return;
+    }
+
+    const accountDoc = accountsSnapshot.docs[0];
+    const accountId = accountDoc.id;
+    const accountData = accountDoc.data() as Account;
+
+    // Check event ordering - only process if this event is newer
+    if (
+      accountData.stripeSubscriptionLastEvent &&
+      subscription.created <= accountData.stripeSubscriptionLastEvent
+    ) {
+      console.log(
+        `Discarding older subscription.updated event (${subscription.created} <= ${accountData.stripeSubscriptionLastEvent})`,
+      );
+      return;
+    }
+
+    // Determine tier and expiration based on status
+    let subscriptionTier: 'premium' | 'essentials' = 'essentials';
+    let expiresAt: admin.firestore.Timestamp | null = null;
+
+    if (subscription.status === 'active' || subscription.status === 'trialing') {
+      subscriptionTier = 'premium';
+      if (subscription.current_period_end) {
+        expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+      }
+    }
+
+    // Update account with subscription data
+    await db.collection('accounts').doc(accountId).update({
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscription.id,
+      stripeSubscriptionStatus: subscription.status,
+      stripeSubscriptionEnds: subscription.current_period_end,
+      stripeSubscriptionLastEvent: subscription.created,
+      subscriptionTier,
+      expiresAt,
+      updatedAt: admin.firestore.Timestamp.now(),
+    });
+
+    console.log(
+      `Successfully processed subscription.updated for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
+    );
   } catch (error) {
     console.error('Error handling subscription updated:', error);
     throw error;
@@ -152,7 +268,24 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
   console.log(`Processing subscription deleted: ${subscription.id}`);
 
   try {
-    const accountId = await getAccountIdFromStripeCustomer(subscription.customer as string);
+    const customerId = subscription.customer as string;
+    const db = admin.firestore();
+
+    // Find account by stripeCustomerId
+    const accountsSnapshot = await db
+      .collection('accounts')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+
+    if (accountsSnapshot.empty) {
+      console.warn(`No account found for Stripe customer ${customerId}`);
+      return;
+    }
+
+    const accountDoc = accountsSnapshot.docs[0];
+    const accountId = accountDoc.id;
+
     await downgradeToEssentials(accountId);
     console.log(`Successfully downgraded account ${accountId} to essentials`);
   } catch (error) {
@@ -164,43 +297,46 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
 /**
  * Handle invoice.payment_succeeded event.
  * This is fired when a subscription payment succeeds (including renewals).
+ * Only tracks payment status - subscription tier is managed by subscription events.
  */
 async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
   console.log(`Processing payment succeeded: ${invoice.id}`);
-
-  const invoiceExt = invoice as Stripe.Invoice & StripeInvoiceExtended;
 
   // Log invoice details for debugging
   console.log('Invoice details:', {
     id: invoice.id,
     customer: invoice.customer,
-    subscription: invoiceExt.subscription,
     billing_reason: invoice.billing_reason,
     status: invoice.status,
   });
 
-  // Only process if this invoice is for a subscription
-  if (!invoiceExt.subscription) {
-    console.log('Invoice is not for a subscription, skipping');
-    return;
-  }
-
   try {
-    // Retrieve the subscription to get updated information
-    const subscription = await stripe.subscriptions.retrieve(invoiceExt.subscription as string);
-    const accountId = await getAccountIdFromStripeCustomer(subscription.customer as string);
-
-    // Update subscription with new period end date
-    await updateAccountSubscription(accountId, subscription);
-
-    // Clear any payment failure timestamp
+    const customerId = invoice.customer as string;
     const db = admin.firestore();
+
+    // Find account by stripeCustomerId
+    const accountsSnapshot = await db
+      .collection('accounts')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+
+    if (accountsSnapshot.empty) {
+      console.warn(`No account found for Stripe customer ${customerId}`);
+      return;
+    }
+
+    const accountDoc = accountsSnapshot.docs[0];
+    const accountId = accountDoc.id;
+
+    // Update only payment tracking fields
     await db.collection('accounts').doc(accountId).update({
+      stripeSubscriptionPaid: true,
       lastPaymentFailedAt: null,
       updatedAt: admin.firestore.Timestamp.now(),
     });
 
-    console.log(`Successfully processed payment succeeded for account ${accountId}`);
+    console.log(`Successfully recorded payment success for account ${accountId}`);
   } catch (error) {
     console.error('Error handling payment succeeded:', error);
     throw error;
@@ -210,41 +346,47 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
 /**
  * Handle invoice.payment_failed event.
  * This is fired when a subscription payment fails.
+ * Only tracks payment status - subscription tier is managed by subscription events.
  */
 async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
   console.log(`Processing payment failed: ${invoice.id}`);
-
-  const invoiceExt = invoice as Stripe.Invoice & StripeInvoiceExtended;
 
   // Log invoice details for debugging
   console.log('Invoice details:', {
     id: invoice.id,
     customer: invoice.customer,
-    subscription: invoiceExt.subscription,
     billing_reason: invoice.billing_reason,
     status: invoice.status,
   });
 
-  // Only process if this invoice is for a subscription
-  if (!invoiceExt.subscription) {
-    console.log('Invoice is not for a subscription, skipping');
-    return;
-  }
-
   try {
-    const subscription = await stripe.subscriptions.retrieve(invoiceExt.subscription as string);
-    const accountId = await getAccountIdFromStripeCustomer(subscription.customer as string);
-
-    // Update subscription status and record payment failure
+    const customerId = invoice.customer as string;
     const db = admin.firestore();
+
+    // Find account by stripeCustomerId
+    const accountsSnapshot = await db
+      .collection('accounts')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+
+    if (accountsSnapshot.empty) {
+      console.warn(`No account found for Stripe customer ${customerId}`);
+      return;
+    }
+
+    const accountDoc = accountsSnapshot.docs[0];
+    const accountId = accountDoc.id;
+
+    // Update only payment tracking fields
     await db.collection('accounts').doc(accountId).update({
-      stripeSubscriptionStatus: subscription.status,
+      stripeSubscriptionPaid: false,
       lastPaymentFailedAt: admin.firestore.Timestamp.now(),
       updatedAt: admin.firestore.Timestamp.now(),
     });
 
-    console.log(`Recorded payment failure for account ${accountId}`);
-    // Note: We don't immediately downgrade - Stripe will retry and eventually send subscription.deleted if all retries fail
+    console.log(`Successfully recorded payment failure for account ${accountId}`);
+    // Note: We don't downgrade here - subscription events will handle tier changes if needed
   } catch (error) {
     console.error('Error handling payment failed:', error);
     throw error;

@@ -40,6 +40,9 @@ export interface Account {
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   stripeSubscriptionStatus?: StripeSubscriptionStatus;
+  stripeSubscriptionEnds?: number; // Unix timestamp of subscription current_period_end
+  stripeSubscriptionLastEvent?: number; // Unix timestamp of last processed subscription event (for ordering)
+  stripeSubscriptionPaid?: boolean;
   lastPaymentFailedAt?: Timestamp | null;
 }
 

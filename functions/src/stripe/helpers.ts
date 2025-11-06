@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin';
 import type Stripe from 'stripe';
 import { stripe } from '../config/stripe';
-import type { Account, StripeSubscriptionExtended, StripeSubscriptionStatus } from '../types';
+import type { Account, StripeSubscriptionStatus } from '../types';
 
 /**
  * Get or create a Stripe customer for a given user.
@@ -125,7 +125,31 @@ export async function hasActiveSubscription(accountId: string): Promise<boolean>
 }
 
 /**
+ * Safely get expiration timestamp from subscription current_period_end.
+ * Returns null if current_period_end is not available.
+ *
+ * @deprecated No longer needed - subscription events handle expiration directly.
+ */
+function getExpirationTimestamp(
+  subscription: Stripe.Subscription,
+): admin.firestore.Timestamp | null {
+  const currentPeriodEnd = subscription.current_period_end;
+
+  if (!currentPeriodEnd || typeof currentPeriodEnd !== 'number') {
+    console.warn(
+      `Invalid current_period_end for subscription ${subscription.id}: ${currentPeriodEnd}`,
+    );
+    return null;
+  }
+
+  return admin.firestore.Timestamp.fromMillis(currentPeriodEnd * 1000);
+}
+
+/**
  * Update account subscription status based on Stripe subscription.
+ *
+ * @deprecated Subscription events now update subscription data directly in handleStripeWebhook.
+ * This function is no longer used and may be removed in a future version.
  *
  * @param accountId - The Firestore account document ID
  * @param subscription - The Stripe subscription object
@@ -147,9 +171,18 @@ export async function updateAccountSubscription(
   if (subscription.status === 'active' || subscription.status === 'trialing') {
     updateData.subscriptionTier = 'premium';
     // Set expiration date to the end of the current period
-    const subscriptionExt = subscription as Stripe.Subscription & StripeSubscriptionExtended;
-    updateData.expiresAt = admin.firestore.Timestamp.fromMillis(
-      subscriptionExt.current_period_end * 1000,
+    updateData.expiresAt = getExpirationTimestamp(subscription);
+    console.log(
+      `Setting subscription tier to premium for account ${accountId} (status: ${subscription.status})`,
+    );
+  } else if (subscription.status === 'incomplete') {
+    // Handle incomplete subscriptions that have been paid
+    // This can happen due to webhook timing - payment succeeds before subscription.updated event
+    // We'll upgrade to premium and let the subscription.updated event confirm it
+    updateData.subscriptionTier = 'premium';
+    updateData.expiresAt = getExpirationTimestamp(subscription);
+    console.log(
+      `Setting subscription tier to premium for incomplete subscription ${accountId} - payment succeeded`,
     );
   } else if (
     subscription.status === 'canceled' ||
@@ -158,16 +191,25 @@ export async function updateAccountSubscription(
   ) {
     updateData.subscriptionTier = 'essentials';
     updateData.expiresAt = null;
+    console.log(
+      `Setting subscription tier to essentials for account ${accountId} (status: ${subscription.status})`,
+    );
   } else if (subscription.status === 'past_due') {
     // Keep as premium during payment retry period
     updateData.subscriptionTier = 'premium';
-    const subscriptionExt = subscription as Stripe.Subscription & StripeSubscriptionExtended;
-    updateData.expiresAt = admin.firestore.Timestamp.fromMillis(
-      subscriptionExt.current_period_end * 1000,
-    );
+    updateData.expiresAt = getExpirationTimestamp(subscription);
     updateData.lastPaymentFailedAt = admin.firestore.Timestamp.now();
+    console.log(
+      `Setting subscription tier to premium (past_due) for account ${accountId} (status: ${subscription.status})`,
+    );
+  } else {
+    // Log unhandled subscription status
+    console.warn(
+      `Unhandled subscription status for account ${accountId}: ${subscription.status}. Tier will not be updated.`,
+    );
   }
 
+  console.log(`Updating account ${accountId} with data:`, updateData);
   await accountRef.update(updateData);
 }
 
@@ -190,6 +232,9 @@ export async function downgradeToEssentials(accountId: string): Promise<void> {
 
 /**
  * Get account ID from Stripe customer metadata.
+ *
+ * @deprecated Use Firestore query by stripeCustomerId instead to avoid extra Stripe API call.
+ * This function makes an unnecessary API call to Stripe and may be removed in a future version.
  *
  * @param customerId - The Stripe customer ID
  * @returns The account document ID
