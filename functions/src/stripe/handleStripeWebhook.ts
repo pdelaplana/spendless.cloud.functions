@@ -170,6 +170,15 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
 
   const invoiceExt = invoice as Stripe.Invoice & StripeInvoiceExtended;
 
+  // Log invoice details for debugging
+  console.log('Invoice details:', {
+    id: invoice.id,
+    customer: invoice.customer,
+    subscription: invoiceExt.subscription,
+    billing_reason: invoice.billing_reason,
+    status: invoice.status,
+  });
+
   // Only process if this invoice is for a subscription
   if (!invoiceExt.subscription) {
     console.log('Invoice is not for a subscription, skipping');
@@ -206,6 +215,15 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
   console.log(`Processing payment failed: ${invoice.id}`);
 
   const invoiceExt = invoice as Stripe.Invoice & StripeInvoiceExtended;
+
+  // Log invoice details for debugging
+  console.log('Invoice details:', {
+    id: invoice.id,
+    customer: invoice.customer,
+    subscription: invoiceExt.subscription,
+    billing_reason: invoice.billing_reason,
+    status: invoice.status,
+  });
 
   // Only process if this invoice is for a subscription
   if (!invoiceExt.subscription) {
