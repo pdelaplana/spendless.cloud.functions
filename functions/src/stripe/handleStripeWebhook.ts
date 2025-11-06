@@ -163,16 +163,19 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription): Pro
     }
 
     // Update account with subscription data
-    await db.collection('accounts').doc(accountId).update({
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscription.id,
-      stripeSubscriptionStatus: subscription.status,
-      stripeSubscriptionEnds: subscription.current_period_end,
-      stripeSubscriptionLastEvent: subscription.created,
-      subscriptionTier,
-      expiresAt,
-      updatedAt: admin.firestore.Timestamp.now(),
-    });
+    await db
+      .collection('accounts')
+      .doc(accountId)
+      .update({
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscription.id,
+        stripeSubscriptionStatus: subscription.status,
+        stripeSubscriptionEnds: subscription.current_period_end || null,
+        stripeSubscriptionLastEvent: subscription.created,
+        subscriptionTier,
+        expiresAt,
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
 
     console.log(
       `Successfully processed subscription.created for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
@@ -240,16 +243,19 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
     }
 
     // Update account with subscription data
-    await db.collection('accounts').doc(accountId).update({
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscription.id,
-      stripeSubscriptionStatus: subscription.status,
-      stripeSubscriptionEnds: subscription.current_period_end,
-      stripeSubscriptionLastEvent: subscription.created,
-      subscriptionTier,
-      expiresAt,
-      updatedAt: admin.firestore.Timestamp.now(),
-    });
+    await db
+      .collection('accounts')
+      .doc(accountId)
+      .update({
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscription.id,
+        stripeSubscriptionStatus: subscription.status,
+        stripeSubscriptionEnds: subscription.current_period_end || null,
+        stripeSubscriptionLastEvent: subscription.created,
+        subscriptionTier,
+        expiresAt,
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
 
     console.log(
       `Successfully processed subscription.updated for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
