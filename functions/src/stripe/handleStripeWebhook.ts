@@ -67,23 +67,23 @@ export const handleStripeWebhook = functions.https.onRequest(
           // Route event to appropriate handler
           switch (event.type) {
             case 'customer.subscription.created':
-              await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+              await handleSubscriptionCreated(event);
               break;
 
             case 'customer.subscription.updated':
-              await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+              await handleSubscriptionUpdated(event);
               break;
 
             case 'customer.subscription.deleted':
-              await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+              await handleSubscriptionDeleted(event);
               break;
 
             case 'invoice.payment_succeeded':
-              await handlePaymentSucceeded(event.data.object as Stripe.Invoice);
+              await handlePaymentSucceeded(event);
               break;
 
             case 'invoice.payment_failed':
-              await handlePaymentFailed(event.data.object as Stripe.Invoice);
+              await handlePaymentFailed(event);
               break;
 
             default:
@@ -110,7 +110,8 @@ export const handleStripeWebhook = functions.https.onRequest(
  * Handle customer.subscription.created event.
  * This is fired when a new subscription is created.
  */
-async function handleSubscriptionCreated(subscription: Stripe.Subscription): Promise<void> {
+async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
+  const subscription = event.data.object as Stripe.Subscription;
   console.log(`Processing subscription created: ${subscription.id}`);
   console.log('Subscription details:', {
     id: subscription.id,
@@ -143,10 +144,10 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription): Pro
     // Check event ordering - only process if this event is newer
     if (
       accountData.stripeSubscriptionLastEvent &&
-      subscription.created <= accountData.stripeSubscriptionLastEvent
+      event.created <= accountData.stripeSubscriptionLastEvent
     ) {
       console.log(
-        `Discarding older subscription.created event (${subscription.created} <= ${accountData.stripeSubscriptionLastEvent})`,
+        `Discarding older subscription.created event (${event.created} <= ${accountData.stripeSubscriptionLastEvent})`,
       );
       return;
     }
@@ -171,7 +172,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription): Pro
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
         stripeSubscriptionEnds: subscription.current_period_end || null,
-        stripeSubscriptionLastEvent: subscription.created,
+        stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
         updatedAt: admin.firestore.Timestamp.now(),
@@ -190,7 +191,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription): Pro
  * Handle customer.subscription.updated event.
  * This is fired when a subscription is modified (e.g., plan change, status change).
  */
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
+async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
+  const subscription = event.data.object as Stripe.Subscription;
   console.log(`Processing subscription updated: ${subscription.id}`);
   console.log('Subscription details:', {
     id: subscription.id,
@@ -223,10 +225,10 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
     // Check event ordering - only process if this event is newer
     if (
       accountData.stripeSubscriptionLastEvent &&
-      subscription.created <= accountData.stripeSubscriptionLastEvent
+      event.created <= accountData.stripeSubscriptionLastEvent
     ) {
       console.log(
-        `Discarding older subscription.updated event (${subscription.created} <= ${accountData.stripeSubscriptionLastEvent})`,
+        `Discarding older subscription.updated event (${event.created} <= ${accountData.stripeSubscriptionLastEvent})`,
       );
       return;
     }
@@ -251,7 +253,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
         stripeSubscriptionEnds: subscription.current_period_end || null,
-        stripeSubscriptionLastEvent: subscription.created,
+        stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
         updatedAt: admin.firestore.Timestamp.now(),
@@ -270,7 +272,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
  * Handle customer.subscription.deleted event.
  * This is fired when a subscription is canceled or expires.
  */
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
+async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
+  const subscription = event.data.object as Stripe.Subscription;
   console.log(`Processing subscription deleted: ${subscription.id}`);
 
   try {
@@ -305,7 +308,8 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
  * This is fired when a subscription payment succeeds (including renewals).
  * Only tracks payment status - subscription tier is managed by subscription events.
  */
-async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
+async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
+  const invoice = event.data.object as Stripe.Invoice;
   console.log(`Processing payment succeeded: ${invoice.id}`);
 
   // Log invoice details for debugging
@@ -354,7 +358,8 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
  * This is fired when a subscription payment fails.
  * Only tracks payment status - subscription tier is managed by subscription events.
  */
-async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
+async function handlePaymentFailed(event: Stripe.Event): Promise<void> {
+  const invoice = event.data.object as Stripe.Invoice;
   console.log(`Processing payment failed: ${invoice.id}`);
 
   // Log invoice details for debugging
