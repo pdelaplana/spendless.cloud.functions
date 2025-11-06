@@ -6,7 +6,9 @@
       "Bash(npm run build:*)",
       "Bash(dir:*)",
       "Bash(cat:*)",
-      "Bash(firebase functions:config:get:*)"
+      "Bash(firebase functions:config:get:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs"
     ],
     "deny": [],
     "ask": []

@@ -25,7 +25,8 @@ const getStripeSecretKey = (): string => {
     );
   }
 
-  return key;
+  // Trim any whitespace, newlines, or carriage returns that might be in the secret
+  return key.trim();
 };
 
 /**
@@ -85,7 +86,8 @@ export const getWebhookSecret = (): string => {
     );
   }
 
-  return secret;
+  // Trim any whitespace, newlines, or carriage returns that might be in the secret
+  return secret.trim();
 };
 
 /**

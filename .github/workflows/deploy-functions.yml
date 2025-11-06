@@ -127,10 +127,10 @@ jobs:
       - name: Ensure Stripe secrets exist in Secret Manager
         run: |
           cd functions
-          # Create or update STRIPE_SECRET_KEY secret
-          echo "${{ secrets.STRIPE_SECRET_KEY }}" | npx firebase functions:secrets:set STRIPE_SECRET_KEY --project ${{ env.FIREBASE_PROJECT_ID }} --force || true
-          # Create or update STRIPE_WEBHOOK_SECRET secret
-          echo "${{ secrets.STRIPE_WEBHOOK_SECRET }}" | npx firebase functions:secrets:set STRIPE_WEBHOOK_SECRET --project ${{ env.FIREBASE_PROJECT_ID }} --force || true
+          # Create or update STRIPE_SECRET_KEY secret (use echo -n to avoid newlines)
+          echo -n "${{ secrets.STRIPE_SECRET_KEY }}" | npx firebase functions:secrets:set STRIPE_SECRET_KEY --project ${{ env.FIREBASE_PROJECT_ID }} --force || true
+          # Create or update STRIPE_WEBHOOK_SECRET secret (use echo -n to avoid newlines)
+          echo -n "${{ secrets.STRIPE_WEBHOOK_SECRET }}" | npx firebase functions:secrets:set STRIPE_WEBHOOK_SECRET --project ${{ env.FIREBASE_PROJECT_ID }} --force || true
 
       - name: Build functions
         run: |
