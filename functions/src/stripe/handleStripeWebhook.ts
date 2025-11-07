@@ -183,12 +183,41 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
       let subscriptionTier: 'premium' | 'essentials' = 'essentials';
       let expiresAt: admin.firestore.Timestamp | null = null;
 
+      console.log('[DEBUG subscription.created] Subscription status check:', {
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        isActiveOrTrialing: subscription.status === 'active' || subscription.status === 'trialing',
+        current_period_end: subscription.current_period_end,
+        current_period_end_type: typeof subscription.current_period_end,
+      });
+
       if (subscription.status === 'active' || subscription.status === 'trialing') {
         subscriptionTier = 'premium';
         if (subscription.current_period_end) {
           expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+          console.log('[DEBUG subscription.created] Set expiresAt:', {
+            current_period_end: subscription.current_period_end,
+            expiresAt: expiresAt.toDate().toISOString(),
+          });
+        } else {
+          console.warn('[DEBUG subscription.created] current_period_end is missing or falsy:', {
+            current_period_end: subscription.current_period_end,
+            subscriptionId: subscription.id,
+          });
         }
+      } else {
+        console.log('[DEBUG subscription.created] Subscription status is not active/trialing:', {
+          status: subscription.status,
+          subscriptionId: subscription.id,
+        });
       }
+
+      console.log('[DEBUG subscription.created] Final values before update:', {
+        accountId,
+        subscriptionTier,
+        expiresAt: expiresAt ? expiresAt.toDate().toISOString() : null,
+        stripeSubscriptionEnds: subscription.current_period_end || null,
+      });
 
       // Atomically update account
       transaction.update(accountDoc.ref, {
@@ -210,7 +239,7 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
       });
 
       console.log(
-        `Successfully processed subscription.created for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
+        `Successfully processed subscription.created for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}, expiresAt=${expiresAt ? expiresAt.toDate().toISOString() : null}`,
       );
     });
   } catch (error) {
@@ -297,12 +326,41 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
       let subscriptionTier: 'premium' | 'essentials' = 'essentials';
       let expiresAt: admin.firestore.Timestamp | null = null;
 
+      console.log('[DEBUG subscription.updated] Subscription status check:', {
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        isActiveOrTrialing: subscription.status === 'active' || subscription.status === 'trialing',
+        current_period_end: subscription.current_period_end,
+        current_period_end_type: typeof subscription.current_period_end,
+      });
+
       if (subscription.status === 'active' || subscription.status === 'trialing') {
         subscriptionTier = 'premium';
         if (subscription.current_period_end) {
           expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+          console.log('[DEBUG subscription.updated] Set expiresAt:', {
+            current_period_end: subscription.current_period_end,
+            expiresAt: expiresAt.toDate().toISOString(),
+          });
+        } else {
+          console.warn('[DEBUG subscription.updated] current_period_end is missing or falsy:', {
+            current_period_end: subscription.current_period_end,
+            subscriptionId: subscription.id,
+          });
         }
+      } else {
+        console.log('[DEBUG subscription.updated] Subscription status is not active/trialing:', {
+          status: subscription.status,
+          subscriptionId: subscription.id,
+        });
       }
+
+      console.log('[DEBUG subscription.updated] Final values before update:', {
+        accountId,
+        subscriptionTier,
+        expiresAt: expiresAt ? expiresAt.toDate().toISOString() : null,
+        stripeSubscriptionEnds: subscription.current_period_end || null,
+      });
 
       // Atomically update account
       transaction.update(accountDoc.ref, {
@@ -324,7 +382,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
       });
 
       console.log(
-        `Successfully processed subscription.updated for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
+        `Successfully processed subscription.updated for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}, expiresAt=${expiresAt ? expiresAt.toDate().toISOString() : null}`,
       );
     });
   } catch (error) {
