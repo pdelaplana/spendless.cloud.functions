@@ -112,6 +112,8 @@ export const handleStripeWebhook = functions.https.onRequest(
 async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
   const subscription = event.data.object as Stripe.Subscription;
   console.log(`Processing subscription created: ${subscription.id}`);
+  console.log(`Subscription Object: ${JSON.stringify(subscription, null, 2)}`);
+
   console.log('Subscription details:', {
     id: subscription.id,
     customer: subscription.customer,
@@ -254,7 +256,10 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
  */
 async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
   const subscription = event.data.object as Stripe.Subscription;
+
   console.log(`Processing subscription updated: ${subscription.id}`);
+  console.log(`Subscription Object: ${JSON.stringify(subscription, null, 2)}`);
+
   console.log('Subscription details:', {
     id: subscription.id,
     customer: subscription.customer,
