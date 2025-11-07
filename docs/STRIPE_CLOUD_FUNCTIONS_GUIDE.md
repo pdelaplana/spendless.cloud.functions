@@ -539,7 +539,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   // Optionally send notification to user (implement email/push notification)
   // You might want to add a 'paymentFailedAt' timestamp to track issues
   await admin.firestore().collection('accounts').doc(accountId).update({
-    lastPaymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+    stripeSubscriptionPaymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
 ```
@@ -662,7 +662,7 @@ interface Account {
   stripeCustomerId?: string;           // Stripe customer ID
   stripeSubscriptionId?: string;       // Current subscription ID
   stripeSubscriptionStatus?: string;   // active, canceled, past_due, etc.
-  lastPaymentFailedAt?: Timestamp;     // Track payment failures
+  stripeSubscriptionPaymentFailedAt?: Timestamp;     // Track payment failures
 }
 ```
 

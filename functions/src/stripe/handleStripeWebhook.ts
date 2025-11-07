@@ -558,8 +558,8 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
       // Prepare update fields
       const updateFields: Partial<Account> = {
         stripeSubscriptionPaid: true,
-        stripeAmountLastPaid: invoice.amount_paid,
-        lastPaymentFailedAt: null,
+        stripeSubscriptionPayment: invoice.amount_paid,
+        stripeSubscriptionPaymentFailedAt: null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp() as admin.firestore.Timestamp,
       };
 
@@ -647,7 +647,7 @@ async function handlePaymentFailed(event: Stripe.Event): Promise<void> {
       // Update only payment tracking fields
       transaction.update(accountDoc.ref, {
         stripeSubscriptionPaid: false,
-        lastPaymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+        stripeSubscriptionPaymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 

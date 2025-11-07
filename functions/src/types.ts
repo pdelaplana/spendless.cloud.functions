@@ -42,8 +42,8 @@ export interface Account {
   stripeSubscriptionStatus?: StripeSubscriptionStatus;
   stripeSubscriptionLastEvent?: number; // Unix timestamp of last processed subscription event (for ordering)
   stripeSubscriptionPaid?: boolean;
-  stripeAmountLastPaid?: number; // Amount paid in last successful payment (in cents)
-  lastPaymentFailedAt?: Timestamp | null;
+  stripeSubscriptionPayment?: number; // Amount paid in last successful payment (in cents)
+  stripeSubscriptionPaymentFailedAt?: Timestamp | null;
 }
 
 // Stripe function input/output types

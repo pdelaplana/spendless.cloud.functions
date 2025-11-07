@@ -206,7 +206,7 @@ describe('handleStripeWebhook', () => {
     expect(updateAccountSubscription).toHaveBeenCalledWith('account123', mockSubscription);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        lastPaymentFailedAt: null,
+        stripeSubscriptionPaymentFailedAt: null,
       }),
     );
     expect(mockResponse.status).toHaveBeenCalledWith(200);

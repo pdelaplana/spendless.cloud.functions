@@ -198,7 +198,7 @@ export async function updateAccountSubscription(
     // Keep as premium during payment retry period
     updateData.subscriptionTier = 'premium';
     updateData.expiresAt = getExpirationTimestamp(subscription);
-    updateData.lastPaymentFailedAt = admin.firestore.Timestamp.now();
+    updateData.stripeSubscriptionPaymentFailedAt = admin.firestore.Timestamp.now();
     console.log(
       `Setting subscription tier to premium (past_due) for account ${accountId} (status: ${subscription.status})`,
     );

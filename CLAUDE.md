@@ -342,7 +342,7 @@ interface Account {
   stripeCustomerId?: string;           // Stripe customer ID
   stripeSubscriptionId?: string;       // Current subscription ID
   stripeSubscriptionStatus?: string;   // Subscription status (active, canceled, etc.)
-  lastPaymentFailedAt?: Timestamp;     // Last payment failure timestamp
+  stripeSubscriptionPaymentFailedAt?: Timestamp;     // Last payment failure timestamp
 }
 ```
 
