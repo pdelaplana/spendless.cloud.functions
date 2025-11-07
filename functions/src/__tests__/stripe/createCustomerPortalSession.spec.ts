@@ -1,5 +1,5 @@
-import type Stripe from 'stripe';
 import functionsTest from 'firebase-functions-test';
+import type Stripe from 'stripe';
 
 // Initialize firebase-functions-test
 const test = functionsTest();
@@ -129,9 +129,9 @@ describe('createCustomerPortalSession', () => {
   it('should throw unauthenticated error when user is not authenticated', async () => {
     const wrapped = test.wrap(createCustomerPortalSession);
 
-    await expect(
-      wrapped({ data: {}, auth: null } as any),
-    ).rejects.toThrow('User must be authenticated to access the customer portal.');
+    await expect(wrapped({ data: {}, auth: null } as any)).rejects.toThrow(
+      'User must be authenticated to access the customer portal.',
+    );
   });
 
   it('should throw invalid-argument error when user ID is missing', async () => {
@@ -154,9 +154,9 @@ describe('createCustomerPortalSession', () => {
 
     const wrapped = test.wrap(createCustomerPortalSession);
 
-    await expect(
-      wrapped({ data: {}, auth: mockAuth } as any),
-    ).rejects.toThrow('Account not found.');
+    await expect(wrapped({ data: {}, auth: mockAuth } as any)).rejects.toThrow(
+      'Account not found.',
+    );
   });
 
   it('should throw failed-precondition error when account has no Stripe customer ID', async () => {
@@ -176,9 +176,9 @@ describe('createCustomerPortalSession', () => {
 
     const wrapped = test.wrap(createCustomerPortalSession);
 
-    await expect(
-      wrapped({ data: {}, auth: mockAuth } as any),
-    ).rejects.toThrow('No Stripe customer found. Please create a subscription first.');
+    await expect(wrapped({ data: {}, auth: mockAuth } as any)).rejects.toThrow(
+      'No Stripe customer found. Please create a subscription first.',
+    );
   });
 
   it('should throw internal error when portal session creation fails', async () => {
@@ -199,9 +199,9 @@ describe('createCustomerPortalSession', () => {
 
     const wrapped = test.wrap(createCustomerPortalSession);
 
-    await expect(
-      wrapped({ data: {}, auth: mockAuth } as any),
-    ).rejects.toThrow('Failed to create customer portal session.');
+    await expect(wrapped({ data: {}, auth: mockAuth } as any)).rejects.toThrow(
+      'Failed to create customer portal session.',
+    );
   });
 
   it('should throw internal error and log to Sentry when unexpected error occurs', async () => {
@@ -214,9 +214,9 @@ describe('createCustomerPortalSession', () => {
     const Sentry = require('@sentry/node');
     const wrapped = test.wrap(createCustomerPortalSession);
 
-    await expect(
-      wrapped({ data: {}, auth: mockAuth } as any),
-    ).rejects.toThrow('An error occurred while creating the customer portal session.');
+    await expect(wrapped({ data: {}, auth: mockAuth } as any)).rejects.toThrow(
+      'An error occurred while creating the customer portal session.',
+    );
 
     // Verify error was logged to Sentry
     expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error));

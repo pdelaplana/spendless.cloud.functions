@@ -642,7 +642,6 @@ describe('handleStripeWebhook', () => {
     it('should handle unhandled event types gracefully', async () => {
       const event: Partial<Stripe.Event> = {
         id: 'evt_unhandled_123',
-        // biome-ignore lint/suspicious/noExplicitAny: Testing unhandled event type
         type: 'customer.created' as any,
         created: now,
         data: {

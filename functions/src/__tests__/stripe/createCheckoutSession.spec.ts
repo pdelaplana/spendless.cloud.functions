@@ -1,5 +1,5 @@
-import type Stripe from 'stripe';
 import functionsTest from 'firebase-functions-test';
+import type Stripe from 'stripe';
 
 // Initialize firebase-functions-test
 const test = functionsTest();
@@ -36,10 +36,7 @@ jest.mock('../../stripe/helpers', () => ({
 import { isValidPriceId, stripe } from '../../config/stripe';
 // Import after mocks
 import { createCheckoutSession } from '../../stripe/createCheckoutSession';
-import {
-  getOrCreateStripeCustomer,
-  hasActiveSubscription,
-} from '../../stripe/helpers';
+import { getOrCreateStripeCustomer, hasActiveSubscription } from '../../stripe/helpers';
 
 describe('createCheckoutSession', () => {
   const mockAuth = {
@@ -135,17 +132,17 @@ describe('createCheckoutSession', () => {
   it('should throw unauthenticated error when user is not authenticated', async () => {
     const wrapped = test.wrap(createCheckoutSession);
 
-    await expect(
-      wrapped({ data: { priceId: 'price_123' }, auth: null } as any),
-    ).rejects.toThrow('User must be authenticated to create a checkout session.');
+    await expect(wrapped({ data: { priceId: 'price_123' }, auth: null } as any)).rejects.toThrow(
+      'User must be authenticated to create a checkout session.',
+    );
   });
 
   it('should throw invalid-argument error when priceId is missing', async () => {
     const wrapped = test.wrap(createCheckoutSession);
 
-    await expect(
-      wrapped({ data: {}, auth: mockAuth } as any),
-    ).rejects.toThrow('Price ID is required.');
+    await expect(wrapped({ data: {}, auth: mockAuth } as any)).rejects.toThrow(
+      'Price ID is required.',
+    );
   });
 
   it('should throw invalid-argument error when priceId is invalid', async () => {

@@ -18,6 +18,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "include": ["src/**/__tests__/**/*.spec.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
