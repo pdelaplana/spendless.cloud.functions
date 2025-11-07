@@ -6,6 +6,41 @@ import { getWebhookSecret, stripe, stripeSecretKey, stripeWebhookSecret } from '
 import type { Account } from '../types';
 
 /**
+ * Calculate subscription end date based on plan interval and interval count.
+ *
+ * @param subscription - The Stripe subscription object
+ * @returns Object containing subscription details and calculated end timestamp
+ */
+function calculateSubscriptionEnd(subscription: Stripe.Subscription): {
+  subscriptionStart: number | null;
+  subscriptionEnd: number | null;
+} {
+  // Extract plan details
+  const plan = subscription.items?.data?.[0]?.plan;
+  const subscriptionStart = plan?.created || null; // timestamp when the plan was created
+
+  const interval = plan?.interval || null; // 'month' or 'year'
+  const intervalCount = plan?.interval_count || 1; // number of intervals
+
+  // Calculate subscription end date based on interval and interval_count
+  let subscriptionEnd: number | null = null;
+  if (subscriptionStart && interval && intervalCount) {
+    const startDate = new Date(subscriptionStart * 1000);
+    if (interval === 'month') {
+      startDate.setMonth(startDate.getMonth() + intervalCount);
+    } else if (interval === 'year') {
+      startDate.setFullYear(startDate.getFullYear() + intervalCount);
+    }
+    subscriptionEnd = Math.floor(startDate.getTime() / 1000);
+  }
+
+  return {
+    subscriptionStart,
+    subscriptionEnd,
+  };
+}
+
+/**
  * Firebase HTTP Function to handle Stripe webhook events.
  * This endpoint processes subscription lifecycle events and updates Firestore accordingly.
  *
@@ -114,10 +149,15 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
   console.log(`Processing subscription created: ${subscription.id}`);
   console.log(`Subscription Object: ${JSON.stringify(subscription, null, 2)}`);
 
+  // Calculate subscription end date using helper function
+  const { subscriptionStart, subscriptionEnd } = calculateSubscriptionEnd(subscription);
+
   console.log('Subscription details:', {
     id: subscription.id,
     customer: subscription.customer,
     status: subscription.status,
+    subscriptionStart,
+    subscriptionEnd,
     current_period_end: subscription.current_period_end,
     created: subscription.created,
     eventId: event.id,
@@ -195,15 +235,15 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
 
       if (subscription.status === 'active' || subscription.status === 'trialing') {
         subscriptionTier = 'premium';
-        if (subscription.current_period_end) {
-          expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+        if (subscriptionEnd) {
+          expiresAt = admin.firestore.Timestamp.fromMillis(subscriptionEnd * 1000);
           console.log('[DEBUG subscription.created] Set expiresAt:', {
-            current_period_end: subscription.current_period_end,
+            subscriptionEnd: subscriptionEnd,
             expiresAt: expiresAt.toDate().toISOString(),
           });
         } else {
-          console.warn('[DEBUG subscription.created] current_period_end is missing or falsy:', {
-            current_period_end: subscription.current_period_end,
+          console.warn('[DEBUG subscription.created] subscriptionEnd is missing or falsy:', {
+            subscriptionEnd: subscriptionEnd,
             subscriptionId: subscription.id,
           });
         }
@@ -218,7 +258,7 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
         accountId,
         subscriptionTier,
         expiresAt: expiresAt ? expiresAt.toDate().toISOString() : null,
-        stripeSubscriptionEnds: subscription.current_period_end || null,
+        stripeSubscriptionEnds: subscriptionEnd || null,
       });
 
       // Atomically update account
@@ -226,7 +266,7 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
-        stripeSubscriptionEnds: subscription.current_period_end || null,
+        stripeSubscriptionEnds: subscriptionEnd || null,
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
@@ -260,11 +300,15 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
   console.log(`Processing subscription updated: ${subscription.id}`);
   console.log(`Subscription Object: ${JSON.stringify(subscription, null, 2)}`);
 
+  // Calculate subscription end date using helper function
+  const { subscriptionStart, subscriptionEnd } = calculateSubscriptionEnd(subscription);
+
   console.log('Subscription details:', {
     id: subscription.id,
     customer: subscription.customer,
     status: subscription.status,
-    current_period_end: subscription.current_period_end,
+    subscriptionStart,
+    subscriptionEnd,
     created: subscription.created,
     eventId: event.id,
   });
@@ -335,21 +379,21 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
         subscriptionId: subscription.id,
         status: subscription.status,
         isActiveOrTrialing: subscription.status === 'active' || subscription.status === 'trialing',
-        current_period_end: subscription.current_period_end,
-        current_period_end_type: typeof subscription.current_period_end,
+        subscriptionEnd: subscriptionEnd,
+        subscriptionEnd_type: typeof subscriptionEnd,
       });
 
       if (subscription.status === 'active' || subscription.status === 'trialing') {
         subscriptionTier = 'premium';
-        if (subscription.current_period_end) {
-          expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+        if (subscriptionEnd) {
+          expiresAt = admin.firestore.Timestamp.fromMillis(subscriptionEnd * 1000);
           console.log('[DEBUG subscription.updated] Set expiresAt:', {
-            current_period_end: subscription.current_period_end,
+            subscriptionEnd: subscriptionEnd,
             expiresAt: expiresAt.toDate().toISOString(),
           });
         } else {
-          console.warn('[DEBUG subscription.updated] current_period_end is missing or falsy:', {
-            current_period_end: subscription.current_period_end,
+          console.warn('[DEBUG subscription.updated] subscriptionEnd is missing or falsy:', {
+            subscriptionEnd: subscriptionEnd,
             subscriptionId: subscription.id,
           });
         }
@@ -364,7 +408,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
         accountId,
         subscriptionTier,
         expiresAt: expiresAt ? expiresAt.toDate().toISOString() : null,
-        stripeSubscriptionEnds: subscription.current_period_end || null,
+        stripeSubscriptionEnds: subscriptionEnd || null,
       });
 
       // Atomically update account
@@ -372,7 +416,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
-        stripeSubscriptionEnds: subscription.current_period_end || null,
+        stripeSubscriptionEnds: subscriptionEnd || null,
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
