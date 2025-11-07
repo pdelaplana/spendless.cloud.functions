@@ -40,9 +40,9 @@ export interface Account {
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   stripeSubscriptionStatus?: StripeSubscriptionStatus;
-  stripeSubscriptionEnds?: number; // Unix timestamp of subscription current_period_end
   stripeSubscriptionLastEvent?: number; // Unix timestamp of last processed subscription event (for ordering)
   stripeSubscriptionPaid?: boolean;
+  stripeAmountLastPaid?: number; // Amount paid in last successful payment (in cents)
   lastPaymentFailedAt?: Timestamp | null;
 }
 
@@ -76,10 +76,6 @@ export type StripeWebhookEventType =
   | 'invoice.payment_failed';
 
 // Extended Stripe types for properties not in current type definitions
-export interface StripeSubscriptionExtended {
-  current_period_end: number;
-}
-
 export interface StripeInvoiceExtended {
   subscription: string | null;
 }

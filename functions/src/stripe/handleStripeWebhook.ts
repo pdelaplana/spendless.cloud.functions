@@ -6,41 +6,6 @@ import { getWebhookSecret, stripe, stripeSecretKey, stripeWebhookSecret } from '
 import type { Account } from '../types';
 
 /**
- * Calculate subscription end date based on plan interval and interval count.
- *
- * @param subscription - The Stripe subscription object
- * @returns Object containing subscription details and calculated end timestamp
- */
-function calculateSubscriptionEnd(subscription: Stripe.Subscription): {
-  subscriptionStart: number | null;
-  subscriptionEnd: number | null;
-} {
-  // Extract plan details
-  const plan = subscription.items?.data?.[0]?.plan;
-  const subscriptionStart = plan?.created || null; // timestamp when the plan was created
-
-  const interval = plan?.interval || null; // 'month' or 'year'
-  const intervalCount = plan?.interval_count || 1; // number of intervals
-
-  // Calculate subscription end date based on interval and interval_count
-  let subscriptionEnd: number | null = null;
-  if (subscriptionStart && interval && intervalCount) {
-    const startDate = new Date(subscriptionStart * 1000);
-    if (interval === 'month') {
-      startDate.setMonth(startDate.getMonth() + intervalCount);
-    } else if (interval === 'year') {
-      startDate.setFullYear(startDate.getFullYear() + intervalCount);
-    }
-    subscriptionEnd = Math.floor(startDate.getTime() / 1000);
-  }
-
-  return {
-    subscriptionStart,
-    subscriptionEnd,
-  };
-}
-
-/**
  * Firebase HTTP Function to handle Stripe webhook events.
  * This endpoint processes subscription lifecycle events and updates Firestore accordingly.
  *
@@ -145,26 +110,11 @@ export const handleStripeWebhook = functions.https.onRequest(
  * This is fired when a new subscription is created.
  */
 async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
-  const subscription = event.data.object as Stripe.Subscription;
-  console.log(`Processing subscription created: ${subscription.id}`);
-  console.log(`Subscription Object: ${JSON.stringify(subscription, null, 2)}`);
-
-  // Calculate subscription end date using helper function
-  const { subscriptionStart, subscriptionEnd } = calculateSubscriptionEnd(subscription);
-
-  console.log('Subscription details:', {
-    id: subscription.id,
-    customer: subscription.customer,
-    status: subscription.status,
-    subscriptionStart,
-    subscriptionEnd,
-    current_period_end: subscription.current_period_end,
-    created: subscription.created,
-    eventId: event.id,
-  });
+  const webhookSubscription = event.data.object as Stripe.Subscription;
+  console.log(`Processing subscription created: ${webhookSubscription.id}`);
 
   try {
-    const customerId = subscription.customer as string;
+    const customerId = webhookSubscription.customer as string;
     const db = admin.firestore();
 
     // Quick check if event already processed (outside transaction for performance)
@@ -175,6 +125,19 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
       console.log(`Event ${event.id} already processed, skipping`);
       return;
     }
+
+    // Fetch fresh subscription data from Stripe API to ensure all fields are populated
+    const subscription = await stripe.subscriptions.retrieve(webhookSubscription.id);
+
+    console.log('Subscription details from API:', {
+      id: subscription.id,
+      customer: subscription.customer,
+      status: subscription.status,
+      current_period_end: subscription.current_period_end,
+      current_period_start: subscription.current_period_start,
+      created: subscription.created,
+      eventId: event.id,
+    });
 
     // Find account by stripeCustomerId
     const accountsSnapshot = await db
@@ -225,40 +188,39 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
       let subscriptionTier: 'premium' | 'essentials' = 'essentials';
       let expiresAt: admin.firestore.Timestamp | null = null;
 
-      console.log('[DEBUG subscription.created] Subscription status check:', {
-        subscriptionId: subscription.id,
-        status: subscription.status,
-        isActiveOrTrialing: subscription.status === 'active' || subscription.status === 'trialing',
-        current_period_end: subscription.current_period_end,
-        current_period_end_type: typeof subscription.current_period_end,
-      });
-
       if (subscription.status === 'active' || subscription.status === 'trialing') {
         subscriptionTier = 'premium';
-        if (subscriptionEnd) {
-          expiresAt = admin.firestore.Timestamp.fromMillis(subscriptionEnd * 1000);
-          console.log('[DEBUG subscription.created] Set expiresAt:', {
-            subscriptionEnd: subscriptionEnd,
+
+        if (subscription.current_period_end) {
+          expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+          console.log('Set expiresAt from current_period_end:', {
+            current_period_end: subscription.current_period_end,
             expiresAt: expiresAt.toDate().toISOString(),
-          });
-        } else {
-          console.warn('[DEBUG subscription.created] subscriptionEnd is missing or falsy:', {
-            subscriptionEnd: subscriptionEnd,
             subscriptionId: subscription.id,
           });
+        } else {
+          console.error(
+            '[CRITICAL] current_period_end is undefined for active/trialing subscription',
+            {
+              subscriptionId: subscription.id,
+              status: subscription.status,
+              apiVersion: '2025-02-24.acacia',
+            },
+          );
+          Sentry.captureMessage('Subscription missing current_period_end', {
+            level: 'error',
+            extra: {
+              subscriptionId: subscription.id,
+              status: subscription.status,
+            },
+          });
         }
-      } else {
-        console.log('[DEBUG subscription.created] Subscription status is not active/trialing:', {
-          status: subscription.status,
-          subscriptionId: subscription.id,
-        });
       }
 
-      console.log('[DEBUG subscription.created] Final values before update:', {
+      console.log('Final values before update:', {
         accountId,
         subscriptionTier,
         expiresAt: expiresAt ? expiresAt.toDate().toISOString() : null,
-        stripeSubscriptionEnds: subscriptionEnd || null,
       });
 
       // Atomically update account
@@ -266,7 +228,6 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
-        stripeSubscriptionEnds: subscriptionEnd || null,
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
@@ -295,26 +256,11 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
  * This is fired when a subscription is modified (e.g., plan change, status change).
  */
 async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
-  const subscription = event.data.object as Stripe.Subscription;
-
-  console.log(`Processing subscription updated: ${subscription.id}`);
-  console.log(`Subscription Object: ${JSON.stringify(subscription, null, 2)}`);
-
-  // Calculate subscription end date using helper function
-  const { subscriptionStart, subscriptionEnd } = calculateSubscriptionEnd(subscription);
-
-  console.log('Subscription details:', {
-    id: subscription.id,
-    customer: subscription.customer,
-    status: subscription.status,
-    subscriptionStart,
-    subscriptionEnd,
-    created: subscription.created,
-    eventId: event.id,
-  });
+  const webhookSubscription = event.data.object as Stripe.Subscription;
+  console.log(`Processing subscription updated: ${webhookSubscription.id}`);
 
   try {
-    const customerId = subscription.customer as string;
+    const customerId = webhookSubscription.customer as string;
     const db = admin.firestore();
 
     // Quick check if event already processed (outside transaction for performance)
@@ -325,6 +271,19 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
       console.log(`Event ${event.id} already processed, skipping`);
       return;
     }
+
+    // Fetch fresh subscription data from Stripe API to ensure all fields are populated
+    const subscription = await stripe.subscriptions.retrieve(webhookSubscription.id);
+
+    console.log('Subscription details from API:', {
+      id: subscription.id,
+      customer: subscription.customer,
+      status: subscription.status,
+      current_period_end: subscription.current_period_end,
+      current_period_start: subscription.current_period_start,
+      created: subscription.created,
+      eventId: event.id,
+    });
 
     // Find account by stripeCustomerId
     const accountsSnapshot = await db
@@ -375,40 +334,39 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
       let subscriptionTier: 'premium' | 'essentials' = 'essentials';
       let expiresAt: admin.firestore.Timestamp | null = null;
 
-      console.log('[DEBUG subscription.updated] Subscription status check:', {
-        subscriptionId: subscription.id,
-        status: subscription.status,
-        isActiveOrTrialing: subscription.status === 'active' || subscription.status === 'trialing',
-        subscriptionEnd: subscriptionEnd,
-        subscriptionEnd_type: typeof subscriptionEnd,
-      });
-
       if (subscription.status === 'active' || subscription.status === 'trialing') {
         subscriptionTier = 'premium';
-        if (subscriptionEnd) {
-          expiresAt = admin.firestore.Timestamp.fromMillis(subscriptionEnd * 1000);
-          console.log('[DEBUG subscription.updated] Set expiresAt:', {
-            subscriptionEnd: subscriptionEnd,
+
+        if (subscription.current_period_end) {
+          expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+          console.log('Set expiresAt from current_period_end:', {
+            current_period_end: subscription.current_period_end,
             expiresAt: expiresAt.toDate().toISOString(),
-          });
-        } else {
-          console.warn('[DEBUG subscription.updated] subscriptionEnd is missing or falsy:', {
-            subscriptionEnd: subscriptionEnd,
             subscriptionId: subscription.id,
           });
+        } else {
+          console.error(
+            '[CRITICAL] current_period_end is undefined for active/trialing subscription',
+            {
+              subscriptionId: subscription.id,
+              status: subscription.status,
+              apiVersion: '2025-02-24.acacia',
+            },
+          );
+          Sentry.captureMessage('Subscription missing current_period_end', {
+            level: 'error',
+            extra: {
+              subscriptionId: subscription.id,
+              status: subscription.status,
+            },
+          });
         }
-      } else {
-        console.log('[DEBUG subscription.updated] Subscription status is not active/trialing:', {
-          status: subscription.status,
-          subscriptionId: subscription.id,
-        });
       }
 
-      console.log('[DEBUG subscription.updated] Final values before update:', {
+      console.log('Final values before update:', {
         accountId,
         subscriptionTier,
         expiresAt: expiresAt ? expiresAt.toDate().toISOString() : null,
-        stripeSubscriptionEnds: subscriptionEnd || null,
       });
 
       // Atomically update account
@@ -416,7 +374,6 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
-        stripeSubscriptionEnds: subscriptionEnd || null,
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
@@ -511,7 +468,7 @@ async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
 /**
  * Handle invoice.payment_succeeded event.
  * This is fired when a subscription payment succeeds (including renewals).
- * Only tracks payment status - subscription tier is managed by subscription events.
+ * Updates payment status AND refreshes subscription expiration date for renewals.
  */
 async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
   const invoice = event.data.object as Stripe.Invoice;
@@ -521,12 +478,14 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
   console.log('Invoice details:', {
     id: invoice.id,
     customer: invoice.customer,
+    subscription: invoice.subscription,
     billing_reason: invoice.billing_reason,
     status: invoice.status,
   });
 
   try {
     const customerId = invoice.customer as string;
+    const subscriptionId = invoice.subscription as string | null;
     const db = admin.firestore();
 
     // Quick check if event already processed (outside transaction for performance)
@@ -553,6 +512,40 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
     const accountDoc = accountsSnapshot.docs[0];
     const accountId = accountDoc.id;
 
+    // Fetch fresh subscription data if this is a subscription payment
+    let expiresAt: admin.firestore.Timestamp | null = null;
+    let subscriptionTier: 'premium' | 'essentials' | null = null;
+
+    if (subscriptionId) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+        console.log('Fetched subscription for payment renewal:', {
+          subscriptionId: subscription.id,
+          status: subscription.status,
+          current_period_end: subscription.current_period_end,
+        });
+
+        // Update expiration if subscription is active
+        if (subscription.status === 'active' || subscription.status === 'trialing') {
+          subscriptionTier = 'premium';
+          if (subscription.current_period_end) {
+            expiresAt = admin.firestore.Timestamp.fromMillis(
+              subscription.current_period_end * 1000,
+            );
+            console.log('Updated expiresAt from subscription renewal:', {
+              current_period_end: subscription.current_period_end,
+              expiresAt: expiresAt.toDate().toISOString(),
+              billingReason: invoice.billing_reason,
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching subscription for payment renewal:', error);
+        // Continue processing payment even if subscription fetch fails
+      }
+    }
+
     // Process in transaction for atomicity
     await db.runTransaction(async (transaction) => {
       // Double-check if event was processed by another concurrent function
@@ -562,12 +555,23 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
         return;
       }
 
-      // Update only payment tracking fields
-      transaction.update(accountDoc.ref, {
+      // Prepare update fields
+      const updateFields: Partial<Account> = {
         stripeSubscriptionPaid: true,
+        stripeAmountLastPaid: invoice.amount_paid,
         lastPaymentFailedAt: null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        updatedAt: admin.firestore.FieldValue.serverTimestamp() as admin.firestore.Timestamp,
+      };
+
+      // Include expiration and tier if we successfully fetched subscription data
+      if (expiresAt !== null) {
+        updateFields.expiresAt = expiresAt;
+      }
+      if (subscriptionTier !== null) {
+        updateFields.subscriptionTier = subscriptionTier;
+      }
+
+      transaction.update(accountDoc.ref, updateFields);
 
       // Mark event as processed
       transaction.set(processedEventRef, {
@@ -576,7 +580,9 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
         processedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      console.log(`Successfully recorded payment success for account ${accountId}`);
+      console.log(
+        `Successfully recorded payment success for account ${accountId}${expiresAt ? ` and updated expiresAt to ${expiresAt.toDate().toISOString()}` : ''}`,
+      );
     });
   } catch (error) {
     console.error('Error handling payment succeeded:', error);
