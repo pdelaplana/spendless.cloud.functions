@@ -189,6 +189,7 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
       let expiresAt: admin.firestore.Timestamp | null = null;
 
       if (subscription.status === 'active' || subscription.status === 'trialing') {
+        // Active or trialing subscriptions get premium access
         subscriptionTier = 'premium';
 
         if (subscription.current_period_end) {
@@ -215,6 +216,30 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
             },
           });
         }
+      } else if (subscription.status === 'past_due') {
+        // Keep premium access during payment retry period
+        subscriptionTier = 'premium';
+
+        if (subscription.current_period_end) {
+          expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+          console.log('Keeping premium access for past_due subscription:', {
+            current_period_end: subscription.current_period_end,
+            expiresAt: expiresAt.toDate().toISOString(),
+            subscriptionId: subscription.id,
+          });
+        }
+      } else if (
+        subscription.status === 'canceled' ||
+        subscription.status === 'unpaid' ||
+        subscription.status === 'incomplete_expired'
+      ) {
+        // Downgrade to essentials for canceled/failed subscriptions
+        subscriptionTier = 'essentials';
+        expiresAt = null;
+        console.log('Downgrading to essentials due to status:', {
+          status: subscription.status,
+          subscriptionId: subscription.id,
+        });
       }
 
       console.log('Final values before update:', {
@@ -228,6 +253,7 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
+        stripeCancelAtPeriodEnd: subscription.cancel_at_period_end || false,
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
@@ -335,6 +361,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
       let expiresAt: admin.firestore.Timestamp | null = null;
 
       if (subscription.status === 'active' || subscription.status === 'trialing') {
+        // Active or trialing subscriptions get premium access
         subscriptionTier = 'premium';
 
         if (subscription.current_period_end) {
@@ -361,6 +388,30 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
             },
           });
         }
+      } else if (subscription.status === 'past_due') {
+        // Keep premium access during payment retry period
+        subscriptionTier = 'premium';
+
+        if (subscription.current_period_end) {
+          expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+          console.log('Keeping premium access for past_due subscription:', {
+            current_period_end: subscription.current_period_end,
+            expiresAt: expiresAt.toDate().toISOString(),
+            subscriptionId: subscription.id,
+          });
+        }
+      } else if (
+        subscription.status === 'canceled' ||
+        subscription.status === 'unpaid' ||
+        subscription.status === 'incomplete_expired'
+      ) {
+        // Downgrade to essentials for canceled/failed subscriptions
+        subscriptionTier = 'essentials';
+        expiresAt = null;
+        console.log('Downgrading to essentials due to status:', {
+          status: subscription.status,
+          subscriptionId: subscription.id,
+        });
       }
 
       console.log('Final values before update:', {
@@ -374,6 +425,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
+        stripeCancelAtPeriodEnd: subscription.cancel_at_period_end || false,
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
@@ -447,6 +499,7 @@ async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
         subscriptionTier: 'essentials',
         expiresAt: null,
         stripeSubscriptionStatus: 'canceled',
+        stripeCancelAtPeriodEnd: false,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
