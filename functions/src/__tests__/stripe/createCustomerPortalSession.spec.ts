@@ -1,4 +1,8 @@
 import type Stripe from 'stripe';
+import functionsTest from 'firebase-functions-test';
+
+// Initialize firebase-functions-test
+const test = functionsTest();
 
 // Mock firebase-admin
 jest.mock('firebase-admin', () => {
@@ -28,18 +32,13 @@ jest.mock('../../config/stripe', () => ({
       },
     },
   },
-}));
-
-// Mock helper functions
-jest.mock('../../stripe/helpers', () => ({
-  getAccountIdByUserId: jest.fn(),
+  stripeSecretKey: { name: 'STRIPE_SECRET_KEY' },
 }));
 
 // Import after mocks
 import * as admin from 'firebase-admin';
 import { stripe } from '../../config/stripe';
 import { createCustomerPortalSession } from '../../stripe/createCustomerPortalSession';
-import { getAccountIdByUserId } from '../../stripe/helpers';
 
 describe('createCustomerPortalSession', () => {
   const mockAuth = {
@@ -66,10 +65,12 @@ describe('createCustomerPortalSession', () => {
     process.env.FRONTEND_URL = 'http://localhost:8100';
   });
 
+  afterAll(() => {
+    test.cleanup();
+  });
+
   it('should create customer portal session successfully', async () => {
     // Setup mocks
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
-
     const mockGet = jest.fn().mockResolvedValue({
       exists: true,
       data: () => mockAccountData,
@@ -77,24 +78,21 @@ describe('createCustomerPortalSession', () => {
 
     const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
     const mockCollection = jest.fn().mockReturnValue({ doc: mockDoc });
-    (admin.firestore as jest.Mock).mockReturnValue({ collection: mockCollection });
+    (admin.firestore as unknown as jest.Mock).mockReturnValue({ collection: mockCollection });
 
     (stripe.billingPortal.sessions.create as jest.Mock).mockResolvedValue(mockPortalSession);
 
-    // Call function
-    const result = await createCustomerPortalSession({
-      auth: mockAuth,
-      data: {},
-    } as never);
+    // Call function using wrapped approach
+    const wrapped = test.wrap(createCustomerPortalSession);
+    const result = await wrapped({ data: {}, auth: mockAuth } as any);
 
     // Assertions
     expect(result).toEqual({
       url: 'https://billing.stripe.com/session/test_123',
     });
 
-    expect(getAccountIdByUserId).toHaveBeenCalledWith('user123');
     expect(mockCollection).toHaveBeenCalledWith('accounts');
-    expect(mockDoc).toHaveBeenCalledWith('account123');
+    expect(mockDoc).toHaveBeenCalledWith('user123');
     expect(stripe.billingPortal.sessions.create).toHaveBeenCalledWith({
       customer: 'cus_123',
       return_url: 'http://localhost:8100/settings',
@@ -103,8 +101,6 @@ describe('createCustomerPortalSession', () => {
 
   it('should use custom return URL when provided', async () => {
     // Setup mocks
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
-
     const mockGet = jest.fn().mockResolvedValue({
       exists: true,
       data: () => mockAccountData,
@@ -112,15 +108,16 @@ describe('createCustomerPortalSession', () => {
 
     const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
     const mockCollection = jest.fn().mockReturnValue({ doc: mockDoc });
-    (admin.firestore as jest.Mock).mockReturnValue({ collection: mockCollection });
+    (admin.firestore as unknown as jest.Mock).mockReturnValue({ collection: mockCollection });
 
     (stripe.billingPortal.sessions.create as jest.Mock).mockResolvedValue(mockPortalSession);
 
     // Call function with custom return URL
-    await createCustomerPortalSession({
-      auth: mockAuth,
+    const wrapped = test.wrap(createCustomerPortalSession);
+    await wrapped({
       data: { returnUrl: 'https://example.com/dashboard' },
-    } as never);
+      auth: mockAuth,
+    } as any);
 
     // Verify custom return URL was used
     expect(stripe.billingPortal.sessions.create).toHaveBeenCalledWith({
@@ -130,50 +127,40 @@ describe('createCustomerPortalSession', () => {
   });
 
   it('should throw unauthenticated error when user is not authenticated', async () => {
-    // Call function without auth
+    const wrapped = test.wrap(createCustomerPortalSession);
+
     await expect(
-      createCustomerPortalSession({
-        auth: null,
-        data: {},
-      } as never),
+      wrapped({ data: {}, auth: null } as any),
     ).rejects.toThrow('User must be authenticated to access the customer portal.');
   });
 
   it('should throw invalid-argument error when user ID is missing', async () => {
-    // Call function without uid
+    const wrapped = test.wrap(createCustomerPortalSession);
+
     await expect(
-      createCustomerPortalSession({
-        auth: { token: { email: 'test@example.com' } },
-        data: {},
-      } as never),
+      wrapped({ data: {}, auth: { token: { email: 'test@example.com' } } } as any),
     ).rejects.toThrow('User ID is required.');
   });
 
   it('should throw not-found error when account does not exist', async () => {
     // Setup mocks
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
-
     const mockGet = jest.fn().mockResolvedValue({
       exists: false,
     });
 
     const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
     const mockCollection = jest.fn().mockReturnValue({ doc: mockDoc });
-    (admin.firestore as jest.Mock).mockReturnValue({ collection: mockCollection });
+    (admin.firestore as unknown as jest.Mock).mockReturnValue({ collection: mockCollection });
 
-    // Call function
+    const wrapped = test.wrap(createCustomerPortalSession);
+
     await expect(
-      createCustomerPortalSession({
-        auth: mockAuth,
-        data: {},
-      } as never),
+      wrapped({ data: {}, auth: mockAuth } as any),
     ).rejects.toThrow('Account not found.');
   });
 
   it('should throw failed-precondition error when account has no Stripe customer ID', async () => {
     // Setup mocks
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
-
     const mockGet = jest.fn().mockResolvedValue({
       exists: true,
       data: () => ({
@@ -185,21 +172,17 @@ describe('createCustomerPortalSession', () => {
 
     const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
     const mockCollection = jest.fn().mockReturnValue({ doc: mockDoc });
-    (admin.firestore as jest.Mock).mockReturnValue({ collection: mockCollection });
+    (admin.firestore as unknown as jest.Mock).mockReturnValue({ collection: mockCollection });
 
-    // Call function
+    const wrapped = test.wrap(createCustomerPortalSession);
+
     await expect(
-      createCustomerPortalSession({
-        auth: mockAuth,
-        data: {},
-      } as never),
+      wrapped({ data: {}, auth: mockAuth } as any),
     ).rejects.toThrow('No Stripe customer found. Please create a subscription first.');
   });
 
   it('should throw internal error when portal session creation fails', async () => {
     // Setup mocks
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
-
     const mockGet = jest.fn().mockResolvedValue({
       exists: true,
       data: () => mockAccountData,
@@ -207,34 +190,32 @@ describe('createCustomerPortalSession', () => {
 
     const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
     const mockCollection = jest.fn().mockReturnValue({ doc: mockDoc });
-    (admin.firestore as jest.Mock).mockReturnValue({ collection: mockCollection });
+    (admin.firestore as unknown as jest.Mock).mockReturnValue({ collection: mockCollection });
 
     (stripe.billingPortal.sessions.create as jest.Mock).mockResolvedValue({
       id: 'bps_123',
       url: null,
     });
 
-    // Call function
+    const wrapped = test.wrap(createCustomerPortalSession);
+
     await expect(
-      createCustomerPortalSession({
-        auth: mockAuth,
-        data: {},
-      } as never),
+      wrapped({ data: {}, auth: mockAuth } as any),
     ).rejects.toThrow('Failed to create customer portal session.');
   });
 
   it('should throw internal error and log to Sentry when unexpected error occurs', async () => {
-    // Setup mocks
-    (getAccountIdByUserId as jest.Mock).mockRejectedValue(new Error('Database error'));
+    // Setup mocks - simulate a database error
+    const mockCollection = jest.fn().mockImplementation(() => {
+      throw new Error('Database error');
+    });
+    (admin.firestore as unknown as jest.Mock).mockReturnValue({ collection: mockCollection });
 
     const Sentry = require('@sentry/node');
+    const wrapped = test.wrap(createCustomerPortalSession);
 
-    // Call function
     await expect(
-      createCustomerPortalSession({
-        auth: mockAuth,
-        data: {},
-      } as never),
+      wrapped({ data: {}, auth: mockAuth } as any),
     ).rejects.toThrow('An error occurred while creating the customer portal session.');
 
     // Verify error was logged to Sentry
@@ -243,8 +224,6 @@ describe('createCustomerPortalSession', () => {
 
   it('should use default return URL when returnUrl is not provided', async () => {
     // Setup mocks
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
-
     const mockGet = jest.fn().mockResolvedValue({
       exists: true,
       data: () => mockAccountData,
@@ -252,15 +231,13 @@ describe('createCustomerPortalSession', () => {
 
     const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
     const mockCollection = jest.fn().mockReturnValue({ doc: mockDoc });
-    (admin.firestore as jest.Mock).mockReturnValue({ collection: mockCollection });
+    (admin.firestore as unknown as jest.Mock).mockReturnValue({ collection: mockCollection });
 
     (stripe.billingPortal.sessions.create as jest.Mock).mockResolvedValue(mockPortalSession);
 
     // Call function with empty data
-    await createCustomerPortalSession({
-      auth: mockAuth,
-      data: {},
-    } as never);
+    const wrapped = test.wrap(createCustomerPortalSession);
+    await wrapped({ data: {}, auth: mockAuth } as any);
 
     // Verify default return URL was used
     expect(stripe.billingPortal.sessions.create).toHaveBeenCalledWith(

@@ -1,4 +1,8 @@
 import type Stripe from 'stripe';
+import functionsTest from 'firebase-functions-test';
+
+// Initialize firebase-functions-test
+const test = functionsTest();
 
 // Mock Sentry
 jest.mock('@sentry/node', () => ({
@@ -20,12 +24,12 @@ jest.mock('../../config/stripe', () => ({
     },
   },
   isValidPriceId: jest.fn(),
+  stripeSecretKey: { name: 'STRIPE_SECRET_KEY' },
 }));
 
 // Mock helper functions
 jest.mock('../../stripe/helpers', () => ({
   getOrCreateStripeCustomer: jest.fn(),
-  getAccountIdByUserId: jest.fn(),
   hasActiveSubscription: jest.fn(),
 }));
 
@@ -33,7 +37,6 @@ import { isValidPriceId, stripe } from '../../config/stripe';
 // Import after mocks
 import { createCheckoutSession } from '../../stripe/createCheckoutSession';
 import {
-  getAccountIdByUserId,
   getOrCreateStripeCustomer,
   hasActiveSubscription,
 } from '../../stripe/helpers';
@@ -61,19 +64,20 @@ describe('createCheckoutSession', () => {
     process.env.FRONTEND_URL = 'http://localhost:8100';
   });
 
+  afterAll(() => {
+    test.cleanup();
+  });
+
   it('should create checkout session successfully', async () => {
     // Setup mocks
     (isValidPriceId as jest.Mock).mockReturnValue(true);
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
     (hasActiveSubscription as jest.Mock).mockResolvedValue(false);
     (getOrCreateStripeCustomer as jest.Mock).mockResolvedValue(mockCustomer);
     (stripe.checkout.sessions.create as jest.Mock).mockResolvedValue(mockSession);
 
-    // Call function
-    const result = await createCheckoutSession({
-      auth: mockAuth,
-      data: { priceId: 'price_123' },
-    } as never);
+    // Call function using wrapped approach
+    const wrapped = test.wrap(createCheckoutSession);
+    const result = await wrapped({ data: { priceId: 'price_123' }, auth: mockAuth } as any);
 
     // Assertions
     expect(result).toEqual({
@@ -81,10 +85,9 @@ describe('createCheckoutSession', () => {
       url: 'https://checkout.stripe.com/pay/cs_test_123',
     });
 
-    expect(getAccountIdByUserId).toHaveBeenCalledWith('user123');
-    expect(hasActiveSubscription).toHaveBeenCalledWith('account123');
+    expect(hasActiveSubscription).toHaveBeenCalledWith('user123');
     expect(getOrCreateStripeCustomer).toHaveBeenCalledWith(
-      'account123',
+      'user123',
       'user123',
       'test@example.com',
     );
@@ -94,9 +97,9 @@ describe('createCheckoutSession', () => {
         mode: 'subscription',
         payment_method_types: ['card'],
         line_items: [{ price: 'price_123', quantity: 1 }],
-        metadata: { accountId: 'account123', userId: 'user123' },
+        metadata: { accountId: 'user123', userId: 'user123' },
         subscription_data: {
-          metadata: { accountId: 'account123', userId: 'user123' },
+          metadata: { accountId: 'user123', userId: 'user123' },
         },
       }),
     );
@@ -105,20 +108,20 @@ describe('createCheckoutSession', () => {
   it('should use custom success and cancel URLs when provided', async () => {
     // Setup mocks
     (isValidPriceId as jest.Mock).mockReturnValue(true);
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
     (hasActiveSubscription as jest.Mock).mockResolvedValue(false);
     (getOrCreateStripeCustomer as jest.Mock).mockResolvedValue(mockCustomer);
     (stripe.checkout.sessions.create as jest.Mock).mockResolvedValue(mockSession);
 
     // Call function with custom URLs
-    await createCheckoutSession({
-      auth: mockAuth,
+    const wrapped = test.wrap(createCheckoutSession);
+    await wrapped({
       data: {
         priceId: 'price_123',
         successUrl: 'https://example.com/success',
         cancelUrl: 'https://example.com/cancel',
       },
-    } as never);
+      auth: mockAuth,
+    } as any);
 
     // Verify custom URLs were used
     expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
@@ -130,22 +133,18 @@ describe('createCheckoutSession', () => {
   });
 
   it('should throw unauthenticated error when user is not authenticated', async () => {
-    // Call function without auth
+    const wrapped = test.wrap(createCheckoutSession);
+
     await expect(
-      createCheckoutSession({
-        auth: null,
-        data: { priceId: 'price_123' },
-      } as never),
+      wrapped({ data: { priceId: 'price_123' }, auth: null } as any),
     ).rejects.toThrow('User must be authenticated to create a checkout session.');
   });
 
   it('should throw invalid-argument error when priceId is missing', async () => {
-    // Call function without priceId
+    const wrapped = test.wrap(createCheckoutSession);
+
     await expect(
-      createCheckoutSession({
-        auth: mockAuth,
-        data: {},
-      } as never),
+      wrapped({ data: {}, auth: mockAuth } as any),
     ).rejects.toThrow('Price ID is required.');
   });
 
@@ -153,27 +152,22 @@ describe('createCheckoutSession', () => {
     // Setup mocks
     (isValidPriceId as jest.Mock).mockReturnValue(false);
 
-    // Call function with invalid priceId
+    const wrapped = test.wrap(createCheckoutSession);
+
     await expect(
-      createCheckoutSession({
-        auth: mockAuth,
-        data: { priceId: 'invalid_price' },
-      } as never),
+      wrapped({ data: { priceId: 'invalid_price' }, auth: mockAuth } as any),
     ).rejects.toThrow('Invalid price ID.');
   });
 
   it('should throw already-exists error when user has active subscription', async () => {
     // Setup mocks
     (isValidPriceId as jest.Mock).mockReturnValue(true);
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
     (hasActiveSubscription as jest.Mock).mockResolvedValue(true);
 
-    // Call function
+    const wrapped = test.wrap(createCheckoutSession);
+
     await expect(
-      createCheckoutSession({
-        auth: mockAuth,
-        data: { priceId: 'price_123' },
-      } as never),
+      wrapped({ data: { priceId: 'price_123' }, auth: mockAuth } as any),
     ).rejects.toThrow('User already has an active subscription.');
 
     // Verify customer creation was not called
@@ -184,7 +178,6 @@ describe('createCheckoutSession', () => {
   it('should throw internal error when Stripe checkout session creation fails', async () => {
     // Setup mocks
     (isValidPriceId as jest.Mock).mockReturnValue(true);
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
     (hasActiveSubscription as jest.Mock).mockResolvedValue(false);
     (getOrCreateStripeCustomer as jest.Mock).mockResolvedValue(mockCustomer);
     (stripe.checkout.sessions.create as jest.Mock).mockResolvedValue({
@@ -192,30 +185,24 @@ describe('createCheckoutSession', () => {
       url: null,
     });
 
-    // Call function
+    const wrapped = test.wrap(createCheckoutSession);
+
     await expect(
-      createCheckoutSession({
-        auth: mockAuth,
-        data: { priceId: 'price_123' },
-      } as never),
+      wrapped({ data: { priceId: 'price_123' }, auth: mockAuth } as any),
     ).rejects.toThrow('Failed to create checkout session.');
   });
 
   it('should throw internal error and log to Sentry when unexpected error occurs', async () => {
     // Setup mocks
     (isValidPriceId as jest.Mock).mockReturnValue(true);
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
     (hasActiveSubscription as jest.Mock).mockResolvedValue(false);
     (getOrCreateStripeCustomer as jest.Mock).mockRejectedValue(new Error('Stripe API error'));
 
     const Sentry = require('@sentry/node');
+    const wrapped = test.wrap(createCheckoutSession);
 
-    // Call function
     await expect(
-      createCheckoutSession({
-        auth: mockAuth,
-        data: { priceId: 'price_123' },
-      } as never),
+      wrapped({ data: { priceId: 'price_123' }, auth: mockAuth } as any),
     ).rejects.toThrow('An error occurred while creating the checkout session.');
 
     // Verify error was logged to Sentry
@@ -223,31 +210,29 @@ describe('createCheckoutSession', () => {
   });
 
   it('should throw invalid-argument error when user email is missing', async () => {
-    // Call function without email
+    const wrapped = test.wrap(createCheckoutSession);
+
     await expect(
-      createCheckoutSession({
+      wrapped({
+        data: { priceId: 'price_123' },
         auth: {
           uid: 'user123',
           token: {},
         },
-        data: { priceId: 'price_123' },
-      } as never),
+      } as any),
     ).rejects.toThrow('User ID and email are required.');
   });
 
   it('should use default URLs when not provided', async () => {
     // Setup mocks
     (isValidPriceId as jest.Mock).mockReturnValue(true);
-    (getAccountIdByUserId as jest.Mock).mockResolvedValue('account123');
     (hasActiveSubscription as jest.Mock).mockResolvedValue(false);
     (getOrCreateStripeCustomer as jest.Mock).mockResolvedValue(mockCustomer);
     (stripe.checkout.sessions.create as jest.Mock).mockResolvedValue(mockSession);
 
-    // Call function without custom URLs
-    await createCheckoutSession({
-      auth: mockAuth,
-      data: { priceId: 'price_123' },
-    } as never);
+    const wrapped = test.wrap(createCheckoutSession);
+
+    await wrapped({ data: { priceId: 'price_123' }, auth: mockAuth } as any);
 
     // Verify default URLs were used
     expect(stripe.checkout.sessions.create).toHaveBeenCalledWith(
