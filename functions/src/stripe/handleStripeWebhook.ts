@@ -4,7 +4,6 @@ import * as functions from 'firebase-functions/v2';
 import type Stripe from 'stripe';
 import { getWebhookSecret, stripe, stripeSecretKey, stripeWebhookSecret } from '../config/stripe';
 import type { Account } from '../types';
-import { downgradeToEssentials } from './helpers';
 
 /**
  * Firebase HTTP Function to handle Stripe webhook events.
@@ -119,11 +118,21 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
     status: subscription.status,
     current_period_end: subscription.current_period_end,
     created: subscription.created,
+    eventId: event.id,
   });
 
   try {
     const customerId = subscription.customer as string;
     const db = admin.firestore();
+
+    // Quick check if event already processed (outside transaction for performance)
+    const processedEventRef = db.collection('processedWebhookEvents').doc(event.id);
+    const processedEventDoc = await processedEventRef.get();
+
+    if (processedEventDoc.exists) {
+      console.log(`Event ${event.id} already processed, skipping`);
+      return;
+    }
 
     // Find account by stripeCustomerId
     const accountsSnapshot = await db
@@ -139,35 +148,50 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
 
     const accountDoc = accountsSnapshot.docs[0];
     const accountId = accountDoc.id;
-    const accountData = accountDoc.data() as Account;
 
-    // Check event ordering - only process if this event is newer
-    if (
-      accountData.stripeSubscriptionLastEvent &&
-      event.created <= accountData.stripeSubscriptionLastEvent
-    ) {
-      console.log(
-        `Discarding older subscription.created event (${event.created} <= ${accountData.stripeSubscriptionLastEvent})`,
-      );
-      return;
-    }
+    // Process in transaction for atomicity
+    await db.runTransaction(async (transaction) => {
+      // Re-read account in transaction
+      const currentAccountDoc = await transaction.get(accountDoc.ref);
+      const accountData = currentAccountDoc.data() as Account;
 
-    // Determine tier and expiration based on status
-    let subscriptionTier: 'premium' | 'essentials' = 'essentials';
-    let expiresAt: admin.firestore.Timestamp | null = null;
-
-    if (subscription.status === 'active' || subscription.status === 'trialing') {
-      subscriptionTier = 'premium';
-      if (subscription.current_period_end) {
-        expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+      // Double-check if event was processed by another concurrent function
+      const processedCheck = await transaction.get(processedEventRef);
+      if (processedCheck.exists) {
+        console.log(`Event ${event.id} was processed by concurrent function, skipping`);
+        return;
       }
-    }
 
-    // Update account with subscription data
-    await db
-      .collection('accounts')
-      .doc(accountId)
-      .update({
+      // Check event ordering - only process if this event is newer
+      if (
+        accountData.stripeSubscriptionLastEvent &&
+        event.created <= accountData.stripeSubscriptionLastEvent
+      ) {
+        console.log(
+          `Discarding older subscription.created event (${event.created} <= ${accountData.stripeSubscriptionLastEvent})`,
+        );
+        // Still mark as processed to prevent reprocessing
+        transaction.set(processedEventRef, {
+          eventId: event.id,
+          eventType: event.type,
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
+      // Determine tier and expiration based on status
+      let subscriptionTier: 'premium' | 'essentials' = 'essentials';
+      let expiresAt: admin.firestore.Timestamp | null = null;
+
+      if (subscription.status === 'active' || subscription.status === 'trialing') {
+        subscriptionTier = 'premium';
+        if (subscription.current_period_end) {
+          expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+        }
+      }
+
+      // Atomically update account
+      transaction.update(accountDoc.ref, {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
@@ -175,12 +199,20 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
-        updatedAt: admin.firestore.Timestamp.now(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-    console.log(
-      `Successfully processed subscription.created for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
-    );
+      // Mark event as processed
+      transaction.set(processedEventRef, {
+        eventId: event.id,
+        eventType: event.type,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(
+        `Successfully processed subscription.created for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
+      );
+    });
   } catch (error) {
     console.error('Error handling subscription created:', error);
     throw error;
@@ -200,11 +232,21 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
     status: subscription.status,
     current_period_end: subscription.current_period_end,
     created: subscription.created,
+    eventId: event.id,
   });
 
   try {
     const customerId = subscription.customer as string;
     const db = admin.firestore();
+
+    // Quick check if event already processed (outside transaction for performance)
+    const processedEventRef = db.collection('processedWebhookEvents').doc(event.id);
+    const processedEventDoc = await processedEventRef.get();
+
+    if (processedEventDoc.exists) {
+      console.log(`Event ${event.id} already processed, skipping`);
+      return;
+    }
 
     // Find account by stripeCustomerId
     const accountsSnapshot = await db
@@ -220,35 +262,50 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
 
     const accountDoc = accountsSnapshot.docs[0];
     const accountId = accountDoc.id;
-    const accountData = accountDoc.data() as Account;
 
-    // Check event ordering - only process if this event is newer
-    if (
-      accountData.stripeSubscriptionLastEvent &&
-      event.created <= accountData.stripeSubscriptionLastEvent
-    ) {
-      console.log(
-        `Discarding older subscription.updated event (${event.created} <= ${accountData.stripeSubscriptionLastEvent})`,
-      );
-      return;
-    }
+    // Process in transaction for atomicity
+    await db.runTransaction(async (transaction) => {
+      // Re-read account in transaction
+      const currentAccountDoc = await transaction.get(accountDoc.ref);
+      const accountData = currentAccountDoc.data() as Account;
 
-    // Determine tier and expiration based on status
-    let subscriptionTier: 'premium' | 'essentials' = 'essentials';
-    let expiresAt: admin.firestore.Timestamp | null = null;
-
-    if (subscription.status === 'active' || subscription.status === 'trialing') {
-      subscriptionTier = 'premium';
-      if (subscription.current_period_end) {
-        expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+      // Double-check if event was processed by another concurrent function
+      const processedCheck = await transaction.get(processedEventRef);
+      if (processedCheck.exists) {
+        console.log(`Event ${event.id} was processed by concurrent function, skipping`);
+        return;
       }
-    }
 
-    // Update account with subscription data
-    await db
-      .collection('accounts')
-      .doc(accountId)
-      .update({
+      // Check event ordering - only process if this event is newer
+      if (
+        accountData.stripeSubscriptionLastEvent &&
+        event.created <= accountData.stripeSubscriptionLastEvent
+      ) {
+        console.log(
+          `Discarding older subscription.updated event (${event.created} <= ${accountData.stripeSubscriptionLastEvent})`,
+        );
+        // Still mark as processed to prevent reprocessing
+        transaction.set(processedEventRef, {
+          eventId: event.id,
+          eventType: event.type,
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
+      // Determine tier and expiration based on status
+      let subscriptionTier: 'premium' | 'essentials' = 'essentials';
+      let expiresAt: admin.firestore.Timestamp | null = null;
+
+      if (subscription.status === 'active' || subscription.status === 'trialing') {
+        subscriptionTier = 'premium';
+        if (subscription.current_period_end) {
+          expiresAt = admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000);
+        }
+      }
+
+      // Atomically update account
+      transaction.update(accountDoc.ref, {
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
@@ -256,12 +313,20 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
-        updatedAt: admin.firestore.Timestamp.now(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-    console.log(
-      `Successfully processed subscription.updated for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
-    );
+      // Mark event as processed
+      transaction.set(processedEventRef, {
+        eventId: event.id,
+        eventType: event.type,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(
+        `Successfully processed subscription.updated for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}`,
+      );
+    });
   } catch (error) {
     console.error('Error handling subscription updated:', error);
     throw error;
@@ -274,11 +339,20 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
  */
 async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
   const subscription = event.data.object as Stripe.Subscription;
-  console.log(`Processing subscription deleted: ${subscription.id}`);
+  console.log(`Processing subscription deleted: ${subscription.id}`, { eventId: event.id });
 
   try {
     const customerId = subscription.customer as string;
     const db = admin.firestore();
+
+    // Quick check if event already processed (outside transaction for performance)
+    const processedEventRef = db.collection('processedWebhookEvents').doc(event.id);
+    const processedEventDoc = await processedEventRef.get();
+
+    if (processedEventDoc.exists) {
+      console.log(`Event ${event.id} already processed, skipping`);
+      return;
+    }
 
     // Find account by stripeCustomerId
     const accountsSnapshot = await db
@@ -295,8 +369,32 @@ async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
     const accountDoc = accountsSnapshot.docs[0];
     const accountId = accountDoc.id;
 
-    await downgradeToEssentials(accountId);
-    console.log(`Successfully downgraded account ${accountId} to essentials`);
+    // Process in transaction for atomicity
+    await db.runTransaction(async (transaction) => {
+      // Double-check if event was processed by another concurrent function
+      const processedCheck = await transaction.get(processedEventRef);
+      if (processedCheck.exists) {
+        console.log(`Event ${event.id} was processed by concurrent function, skipping`);
+        return;
+      }
+
+      // Downgrade account to essentials
+      transaction.update(accountDoc.ref, {
+        subscriptionTier: 'essentials',
+        expiresAt: null,
+        stripeSubscriptionStatus: 'canceled',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Mark event as processed
+      transaction.set(processedEventRef, {
+        eventId: event.id,
+        eventType: event.type,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`Successfully downgraded account ${accountId} to essentials`);
+    });
   } catch (error) {
     console.error('Error handling subscription deleted:', error);
     throw error;
@@ -310,7 +408,7 @@ async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
  */
 async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
   const invoice = event.data.object as Stripe.Invoice;
-  console.log(`Processing payment succeeded: ${invoice.id}`);
+  console.log(`Processing payment succeeded: ${invoice.id}`, { eventId: event.id });
 
   // Log invoice details for debugging
   console.log('Invoice details:', {
@@ -323,6 +421,15 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
   try {
     const customerId = invoice.customer as string;
     const db = admin.firestore();
+
+    // Quick check if event already processed (outside transaction for performance)
+    const processedEventRef = db.collection('processedWebhookEvents').doc(event.id);
+    const processedEventDoc = await processedEventRef.get();
+
+    if (processedEventDoc.exists) {
+      console.log(`Event ${event.id} already processed, skipping`);
+      return;
+    }
 
     // Find account by stripeCustomerId
     const accountsSnapshot = await db
@@ -339,14 +446,31 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
     const accountDoc = accountsSnapshot.docs[0];
     const accountId = accountDoc.id;
 
-    // Update only payment tracking fields
-    await db.collection('accounts').doc(accountId).update({
-      stripeSubscriptionPaid: true,
-      lastPaymentFailedAt: null,
-      updatedAt: admin.firestore.Timestamp.now(),
-    });
+    // Process in transaction for atomicity
+    await db.runTransaction(async (transaction) => {
+      // Double-check if event was processed by another concurrent function
+      const processedCheck = await transaction.get(processedEventRef);
+      if (processedCheck.exists) {
+        console.log(`Event ${event.id} was processed by concurrent function, skipping`);
+        return;
+      }
 
-    console.log(`Successfully recorded payment success for account ${accountId}`);
+      // Update only payment tracking fields
+      transaction.update(accountDoc.ref, {
+        stripeSubscriptionPaid: true,
+        lastPaymentFailedAt: null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Mark event as processed
+      transaction.set(processedEventRef, {
+        eventId: event.id,
+        eventType: event.type,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`Successfully recorded payment success for account ${accountId}`);
+    });
   } catch (error) {
     console.error('Error handling payment succeeded:', error);
     throw error;
@@ -360,7 +484,7 @@ async function handlePaymentSucceeded(event: Stripe.Event): Promise<void> {
  */
 async function handlePaymentFailed(event: Stripe.Event): Promise<void> {
   const invoice = event.data.object as Stripe.Invoice;
-  console.log(`Processing payment failed: ${invoice.id}`);
+  console.log(`Processing payment failed: ${invoice.id}`, { eventId: event.id });
 
   // Log invoice details for debugging
   console.log('Invoice details:', {
@@ -373,6 +497,15 @@ async function handlePaymentFailed(event: Stripe.Event): Promise<void> {
   try {
     const customerId = invoice.customer as string;
     const db = admin.firestore();
+
+    // Quick check if event already processed (outside transaction for performance)
+    const processedEventRef = db.collection('processedWebhookEvents').doc(event.id);
+    const processedEventDoc = await processedEventRef.get();
+
+    if (processedEventDoc.exists) {
+      console.log(`Event ${event.id} already processed, skipping`);
+      return;
+    }
 
     // Find account by stripeCustomerId
     const accountsSnapshot = await db
@@ -389,15 +522,32 @@ async function handlePaymentFailed(event: Stripe.Event): Promise<void> {
     const accountDoc = accountsSnapshot.docs[0];
     const accountId = accountDoc.id;
 
-    // Update only payment tracking fields
-    await db.collection('accounts').doc(accountId).update({
-      stripeSubscriptionPaid: false,
-      lastPaymentFailedAt: admin.firestore.Timestamp.now(),
-      updatedAt: admin.firestore.Timestamp.now(),
-    });
+    // Process in transaction for atomicity
+    await db.runTransaction(async (transaction) => {
+      // Double-check if event was processed by another concurrent function
+      const processedCheck = await transaction.get(processedEventRef);
+      if (processedCheck.exists) {
+        console.log(`Event ${event.id} was processed by concurrent function, skipping`);
+        return;
+      }
 
-    console.log(`Successfully recorded payment failure for account ${accountId}`);
-    // Note: We don't downgrade here - subscription events will handle tier changes if needed
+      // Update only payment tracking fields
+      transaction.update(accountDoc.ref, {
+        stripeSubscriptionPaid: false,
+        lastPaymentFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Mark event as processed
+      transaction.set(processedEventRef, {
+        eventId: event.id,
+        eventType: event.type,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`Successfully recorded payment failure for account ${accountId}`);
+      // Note: We don't downgrade here - subscription events will handle tier changes if needed
+    });
   } catch (error) {
     console.error('Error handling payment failed:', error);
     throw error;

@@ -11,3 +11,4 @@ export { sendWelcomeEmail } from './sendWelcomeEmail';
 export { createCheckoutSession } from './stripe/createCheckoutSession';
 export { createCustomerPortalSession } from './stripe/createCustomerPortalSession';
 export { handleStripeWebhook } from './stripe/handleStripeWebhook';
+export { cleanupProcessedEvents } from './stripe/cleanupProcessedEvents';

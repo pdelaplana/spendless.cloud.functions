@@ -83,3 +83,10 @@ export interface StripeSubscriptionExtended {
 export interface StripeInvoiceExtended {
   subscription: string | null;
 }
+
+// Processed webhook event tracking for idempotency
+export interface ProcessedWebhookEvent {
+  eventId: string;
+  eventType: string;
+  processedAt: Timestamp;
+}
