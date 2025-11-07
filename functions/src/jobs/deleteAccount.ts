@@ -1,7 +1,9 @@
 import Sentry from '@sentry/node';
 import admin from 'firebase-admin';
 import { params } from 'firebase-functions';
+import { stripe } from '../config/stripe';
 import { sendEmailNotification } from '../helpers/sendEmail';
+import type { Account } from '../types';
 
 export const deleteAccount = async ({
   userId,
@@ -21,6 +23,33 @@ export const deleteAccount = async ({
 
       if (!accountSnapshot.exists) {
         throw new Error(`Account with ID ${userId} not found.`);
+      }
+
+      const accountData = accountSnapshot.data() as Account;
+
+      // Cancel Stripe subscription if exists
+      if (accountData.stripeSubscriptionId) {
+        try {
+          console.log(
+            `Canceling Stripe subscription ${accountData.stripeSubscriptionId} for user ${userId}`,
+          );
+          await stripe.subscriptions.cancel(accountData.stripeSubscriptionId);
+          console.log(
+            `Successfully canceled Stripe subscription ${accountData.stripeSubscriptionId}`,
+          );
+        } catch (stripeError) {
+          // Log but don't fail - subscription might already be canceled or not exist in Stripe
+          console.warn(
+            `Failed to cancel Stripe subscription ${accountData.stripeSubscriptionId}:`,
+            stripeError,
+          );
+          Sentry.captureException(stripeError, {
+            extra: {
+              userId,
+              subscriptionId: accountData.stripeSubscriptionId,
+            },
+          });
+        }
       }
 
       // Delete subcollections first (periods and spending)
