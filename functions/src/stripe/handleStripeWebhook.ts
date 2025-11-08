@@ -254,6 +254,8 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
         stripeCancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+        subscriptionCancelled:
+          subscription.cancel_at_period_end || subscription.status === 'canceled',
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
@@ -426,6 +428,8 @@ async function handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
         stripeSubscriptionId: subscription.id,
         stripeSubscriptionStatus: subscription.status,
         stripeCancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+        subscriptionCancelled:
+          subscription.cancel_at_period_end || subscription.status === 'canceled',
         stripeSubscriptionLastEvent: event.created,
         subscriptionTier,
         expiresAt,
@@ -500,6 +504,7 @@ async function handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
         expiresAt: null,
         stripeSubscriptionStatus: 'canceled',
         stripeCancelAtPeriodEnd: false,
+        subscriptionCancelled: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 

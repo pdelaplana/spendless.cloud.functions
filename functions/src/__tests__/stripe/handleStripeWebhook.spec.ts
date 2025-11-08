@@ -212,6 +212,7 @@ describe('handleStripeWebhook', () => {
           stripeSubscriptionId: 'sub_123',
           stripeSubscriptionStatus: 'active',
           stripeCancelAtPeriodEnd: false,
+          subscriptionCancelled: false,
           subscriptionTier: 'premium',
         }),
       );
@@ -311,6 +312,7 @@ describe('handleStripeWebhook', () => {
         expect.objectContaining({
           subscriptionTier: 'premium', // Still premium until period ends
           stripeCancelAtPeriodEnd: true, // But cancellation is scheduled
+          subscriptionCancelled: true, // Subscription is cancelled (scheduled)
         }),
       );
     });
@@ -339,6 +341,7 @@ describe('handleStripeWebhook', () => {
         expect.objectContaining({
           subscriptionTier: 'premium',
           stripeCancelAtPeriodEnd: false,
+          subscriptionCancelled: false,
         }),
       );
     });
@@ -509,6 +512,7 @@ describe('handleStripeWebhook', () => {
           expiresAt: null,
           stripeSubscriptionStatus: 'canceled',
           stripeCancelAtPeriodEnd: false,
+          subscriptionCancelled: true,
         }),
       );
       expect(mockResponse.status).toHaveBeenCalledWith(200);

@@ -41,6 +41,7 @@ export interface Account {
   stripeSubscriptionId?: string;
   stripeSubscriptionStatus?: StripeSubscriptionStatus;
   stripeCancelAtPeriodEnd?: boolean; // Whether subscription is scheduled to cancel at period end
+  subscriptionCancelled?: boolean; // Whether subscription has been cancelled (scheduled or immediate)
   stripeSubscriptionLastEvent?: number; // Unix timestamp of last processed subscription event (for ordering)
   stripeSubscriptionPaid?: boolean;
   stripeSubscriptionPayment?: number; // Amount paid in last successful payment (in cents)
