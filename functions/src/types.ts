@@ -13,3 +13,78 @@ export type Job = {
   errors: string[];
   attempts: number;
 };
+
+// Stripe-related types
+
+export type SubscriptionTier = 'essentials' | 'premium';
+
+export type StripeSubscriptionStatus =
+  | 'active'
+  | 'canceled'
+  | 'incomplete'
+  | 'incomplete_expired'
+  | 'past_due'
+  | 'trialing'
+  | 'unpaid';
+
+export interface Account {
+  id: string;
+  userId: string;
+  name: string;
+  currency: string;
+  subscriptionTier: SubscriptionTier;
+  expiresAt: Timestamp | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  // Stripe-related fields
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  stripeSubscriptionStatus?: StripeSubscriptionStatus;
+  stripeCancelAtPeriodEnd?: boolean; // Whether subscription is scheduled to cancel at period end
+  subscriptionCancelled?: boolean; // Whether subscription has been cancelled (scheduled or immediate)
+  stripeSubscriptionLastEvent?: number; // Unix timestamp of last processed subscription event (for ordering)
+  stripeSubscriptionPaid?: boolean;
+  stripeSubscriptionPayment?: number; // Amount paid in last successful payment (in cents)
+  stripeSubscriptionPaymentFailedAt?: Timestamp | null;
+}
+
+// Stripe function input/output types
+
+export interface CreateCheckoutSessionRequest {
+  priceId: string;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export interface CreateCheckoutSessionResponse {
+  sessionId: string;
+  url: string;
+}
+
+export interface CreateCustomerPortalSessionRequest {
+  returnUrl?: string;
+}
+
+export interface CreateCustomerPortalSessionResponse {
+  url: string;
+}
+
+// Stripe webhook event types
+export type StripeWebhookEventType =
+  | 'customer.subscription.created'
+  | 'customer.subscription.updated'
+  | 'customer.subscription.deleted'
+  | 'invoice.payment_succeeded'
+  | 'invoice.payment_failed';
+
+// Extended Stripe types for properties not in current type definitions
+export interface StripeInvoiceExtended {
+  subscription: string | null;
+}
+
+// Processed webhook event tracking for idempotency
+export interface ProcessedWebhookEvent {
+  eventId: string;
+  eventType: string;
+  processedAt: Timestamp;
+}
