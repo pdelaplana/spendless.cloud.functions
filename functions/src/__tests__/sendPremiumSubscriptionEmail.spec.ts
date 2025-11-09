@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 import type { UserRecord } from 'firebase-admin/auth';
 import { sendEmailNotification } from '../helpers/sendEmail';
 
-// Mock firebase-admin (same pattern as deleteAccount.spec.ts)
+// Mock firebase-admin (same pattern as sendWelcomeEmail.spec.ts)
 jest.mock('firebase-admin', () => {
   return {
     firestore: jest.fn().mockReturnValue({
@@ -37,44 +37,40 @@ jest.mock('@sentry/node', () => ({
 // Mock fs for template loading
 jest.mock('node:fs', () => ({
   readFileSync: jest.fn().mockReturnValue(`
-# Welcome Email - New User
+# Premium Subscription - Thank You Email
 
 ## Subject Line
-Hey {firstName}, welcome to Spendless!
+Thanks for upgrading to Premium, {firstName}!
 
 ## Email Body
 
 Hey {firstName},
 
-Thanks for signing up! I'm glad you're here.
+Thank you so much for upgrading to Spendless Premium!
 
-### Here's how to get rolling:
-
-**Create a period** - Pick how you want to track your spending: weekly, monthly, or whatever works for you.
+Your support means the world to me and directly helps keep Spendless growing and improving.
 
 Cheers,
 {founderName}
 Founder, Spendless
 
-P.S. - Start simple. You can always add more detail later.
-
-© {currentYear} Spendless. All rights reserved.
-
 ---
 
 ## Email Footer
+
+© {currentYear} Spendless. All rights reserved.
   `),
 }));
 
 // Import after mocks are set up
-import { sendWelcomeEmail } from '../sendWelcomeEmail';
+import { sendPremiumSubscriptionEmail } from '../sendPremiumSubscriptionEmail';
 
-describe('sendWelcomeEmail', () => {
+describe('sendPremiumSubscriptionEmail', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should send welcome email successfully with displayName', async () => {
+  it('should send premium subscription email successfully with displayName', async () => {
     // Mock user with displayName
     const mockUserRecord: Partial<UserRecord> = {
       uid: 'user123',
@@ -84,14 +80,8 @@ describe('sendWelcomeEmail', () => {
 
     (admin.auth().getUser as jest.Mock).mockResolvedValue(mockUserRecord);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
-    // Execute function by calling the handler directly
-    await sendWelcomeEmail(mockEvent as never);
+    // Execute function
+    await sendPremiumSubscriptionEmail('user123');
 
     // Verify email was sent
     expect(sendEmailNotification).toHaveBeenCalledWith(
@@ -111,7 +101,6 @@ describe('sendWelcomeEmail', () => {
     // Verify the body contains replaced variables
     expect(emailCall.html).toContain('John');
     expect(emailCall.html).toContain('Patrick');
-    expect(emailCall.html).toContain(new Date().getFullYear().toString());
   });
 
   it('should use "there" as fallback when displayName is undefined', async () => {
@@ -124,14 +113,8 @@ describe('sendWelcomeEmail', () => {
 
     (admin.auth().getUser as jest.Mock).mockResolvedValue(mockUserRecord);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
-    // Execute function by calling the handler directly
-    await sendWelcomeEmail(mockEvent as never);
+    // Execute function
+    await sendPremiumSubscriptionEmail('user123');
 
     // Verify email was sent with "there" as firstName
     expect(sendEmailNotification).toHaveBeenCalledWith(
@@ -155,14 +138,8 @@ describe('sendWelcomeEmail', () => {
 
     (admin.auth().getUser as jest.Mock).mockResolvedValue(mockUserRecord);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
-    // Execute function by calling the handler directly
-    await sendWelcomeEmail(mockEvent as never);
+    // Execute function
+    await sendPremiumSubscriptionEmail('user123');
 
     // Verify email was sent with "there" as firstName
     const emailCall = (sendEmailNotification as jest.Mock).mock.calls[0][0];
@@ -180,14 +157,8 @@ describe('sendWelcomeEmail', () => {
 
     (admin.auth().getUser as jest.Mock).mockResolvedValue(mockUserRecord);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
-    // Execute function by calling the handler directly
-    await sendWelcomeEmail(mockEvent as never);
+    // Execute function
+    await sendPremiumSubscriptionEmail('user123');
 
     // Verify only first name is used
     const emailCall = (sendEmailNotification as jest.Mock).mock.calls[0][0];
@@ -206,14 +177,8 @@ describe('sendWelcomeEmail', () => {
 
     (admin.auth().getUser as jest.Mock).mockResolvedValue(mockUserRecord);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
-    // Execute function by calling the handler directly
-    await sendWelcomeEmail(mockEvent as never);
+    // Execute function
+    await sendPremiumSubscriptionEmail('user123');
 
     // Verify email was NOT sent
     expect(sendEmailNotification).not.toHaveBeenCalled();
@@ -224,14 +189,8 @@ describe('sendWelcomeEmail', () => {
     const authError = new Error('User not found');
     (admin.auth().getUser as jest.Mock).mockRejectedValue(authError);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
     // Execute function - should not throw
-    await expect(sendWelcomeEmail(mockEvent as never)).resolves.not.toThrow();
+    await expect(sendPremiumSubscriptionEmail('user123')).resolves.not.toThrow();
 
     // Verify email was NOT sent
     expect(sendEmailNotification).not.toHaveBeenCalled();
@@ -251,14 +210,8 @@ describe('sendWelcomeEmail', () => {
     const emailError = new Error('Mailgun API error');
     (sendEmailNotification as jest.Mock).mockRejectedValue(emailError);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
     // Execute function - should not throw (graceful error handling)
-    await expect(sendWelcomeEmail(mockEvent as never)).resolves.not.toThrow();
+    await expect(sendPremiumSubscriptionEmail('user123')).resolves.not.toThrow();
   });
 
   it('should replace all template variables correctly', async () => {
@@ -271,14 +224,8 @@ describe('sendWelcomeEmail', () => {
 
     (admin.auth().getUser as jest.Mock).mockResolvedValue(mockUserRecord);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
-    // Execute function by calling the handler directly
-    await sendWelcomeEmail(mockEvent as never);
+    // Execute function
+    await sendPremiumSubscriptionEmail('user123');
 
     // Get the email that was sent
     const emailCall = (sendEmailNotification as jest.Mock).mock.calls[0][0];
@@ -286,12 +233,10 @@ describe('sendWelcomeEmail', () => {
     // Verify all variables were replaced
     expect(emailCall.html).toContain('Alice');
     expect(emailCall.html).toContain('Patrick');
-    expect(emailCall.html).toContain(new Date().getFullYear().toString());
 
     // Verify no placeholders remain
     expect(emailCall.html).not.toContain('{firstName}');
     expect(emailCall.html).not.toContain('{founderName}');
-    expect(emailCall.html).not.toContain('{currentYear}');
   });
 
   it('should convert markdown to HTML', async () => {
@@ -304,21 +249,14 @@ describe('sendWelcomeEmail', () => {
 
     (admin.auth().getUser as jest.Mock).mockResolvedValue(mockUserRecord);
 
-    // Create mock event
-    const mockEvent = {
-      params: { userId: 'user123' },
-      data: null,
-    };
-
-    // Execute function by calling the handler directly
-    await sendWelcomeEmail(mockEvent as never);
+    // Execute function
+    await sendPremiumSubscriptionEmail('user123');
 
     // Get the email that was sent
     const emailCall = (sendEmailNotification as jest.Mock).mock.calls[0][0];
 
-    // Verify HTML tags are present
+    // Verify HTML tags are present (email has paragraphs and line breaks)
     expect(emailCall.html).toContain('<p>');
-    expect(emailCall.html).toContain('<h3>');
-    expect(emailCall.html).toContain('<strong>');
+    expect(emailCall.html).toContain('<br>');
   });
 });

@@ -9,7 +9,7 @@ const mockTransaction = {
   update: jest.fn(),
 };
 
-const mockRunTransaction = jest.fn((callback) => callback(mockTransaction));
+const mockRunTransaction = jest.fn(async (callback) => await callback(mockTransaction));
 
 const mockGet = jest.fn();
 const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
@@ -81,6 +81,11 @@ jest.mock('../../config/stripe', () => ({
     },
   },
   getWebhookSecret: jest.fn().mockReturnValue('whsec_test_secret'),
+}));
+
+// Mock sendPremiumSubscriptionEmail
+jest.mock('../../sendPremiumSubscriptionEmail', () => ({
+  sendPremiumSubscriptionEmail: jest.fn().mockResolvedValue(undefined),
 }));
 
 import Sentry from '@sentry/node';

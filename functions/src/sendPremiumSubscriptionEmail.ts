@@ -2,7 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import Sentry from '@sentry/node';
 import admin from 'firebase-admin';
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { sendEmailNotification } from './helpers/sendEmail';
 
 /**
@@ -20,17 +19,17 @@ function extractFirstName(displayName: string | null | undefined): string {
 }
 
 /**
- * Loads and parses the welcome email template
+ * Loads and parses the premium subscription email template
  * @returns Object with subject and body from the template
  */
 function loadEmailTemplate(): { subject: string; body: string } {
   // Templates are copied to lib/templates during build
-  const templatePath = path.join(__dirname, 'templates', 'emails', 'welcome-email.md');
+  const templatePath = path.join(__dirname, 'templates', 'emails', 'premium-subscription-email.md');
   const templateContent = fs.readFileSync(templatePath, 'utf-8');
 
   // Extract subject line (after "## Subject Line")
   const subjectMatch = templateContent.match(/## Subject Line\s*\n(.+)/);
-  const subject = subjectMatch ? subjectMatch[1].trim() : 'Welcome to Spendless!';
+  const subject = subjectMatch ? subjectMatch[1].trim() : 'Thanks for upgrading to Premium!';
 
   // Extract email body (after "## Email Body" until "---" or "## Email Footer")
   const bodyMatch = templateContent.match(
@@ -83,25 +82,27 @@ function convertMarkdownToHtml(markdown: string): string {
 }
 
 /**
- * Cloud Function that sends a welcome email when a new Account is created
- * Trigger: Firestore onCreate for accounts/{userId}
+ * Sends a premium subscription thank you email to a user
+ * This function is called from the Stripe webhook handler when a subscription is created
+ * @param userId - The Firebase user ID
  */
-export const sendWelcomeEmail = onDocumentCreated('accounts/{userId}', async (event) => {
+export async function sendPremiumSubscriptionEmail(userId: string): Promise<void> {
   return Sentry.startSpan(
-    { name: 'sendWelcomeEmail', op: 'function.firestore.onDocumentCreated' },
+    { name: 'sendPremiumSubscriptionEmail', op: 'function.email' },
     async () => {
-      const userId = event.params.userId;
-
-      console.log(`Welcome email trigger fired for user: ${userId}`);
+      console.log(`Sending premium subscription email for user: ${userId}`);
 
       try {
         // Fetch user from Firebase Auth
         const userRecord = await admin.auth().getUser(userId);
 
         if (!userRecord.email) {
-          console.warn(`User ${userId} has no email address. Skipping welcome email.`);
-          Sentry.captureMessage(`User ${userId} has no email address for welcome email`, 'warning');
-          return null;
+          console.warn(`User ${userId} has no email address. Skipping premium subscription email.`);
+          Sentry.captureMessage(
+            `User ${userId} has no email address for premium subscription email`,
+            'warning',
+          );
+          return;
         }
 
         // Extract first name from displayName
@@ -133,19 +134,19 @@ export const sendWelcomeEmail = onDocumentCreated('accounts/{userId}', async (ev
           html: bodyHtml,
         });
 
-        console.log(`Welcome email sent successfully to ${userRecord.email} (User: ${userId})`);
+        console.log(
+          `Premium subscription email sent successfully to ${userRecord.email} (User: ${userId})`,
+        );
       } catch (error) {
-        // Log error but don't throw - email failures should not block account creation
-        console.error(`Error sending welcome email for user ${userId}:`, error);
+        // Log error but don't throw - email failures should not block webhook processing
+        console.error(`Error sending premium subscription email for user ${userId}:`, error);
         Sentry.captureException(error, {
           extra: {
             userId,
-            operation: 'sendWelcomeEmail',
+            operation: 'sendPremiumSubscriptionEmail',
           },
         });
       }
-
-      return null;
     },
   );
-});
+}
