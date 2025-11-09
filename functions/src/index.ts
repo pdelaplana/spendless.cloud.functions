@@ -6,6 +6,7 @@ export { queueJob } from './queueJob';
 export { processJob } from './processJob';
 export { deleteAccount } from './deleteAccount';
 export { sendWelcomeEmail } from './sendWelcomeEmail';
+export { sendPremiumSubscriptionEmail } from './sendPremiumSubscriptionEmail';
 
 // Stripe functions
 export { createCheckoutSession } from './stripe/createCheckoutSession';
