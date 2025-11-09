@@ -127,7 +127,7 @@ export const sendWelcomeEmail = onDocumentCreated('accounts/{userId}', async (ev
 
         // Send email via Mailgun
         await sendEmailNotification({
-          from: '"Spendless" <noreply@spendless.app>',
+          from: '"Spendless" <patrick@getspendless.com>',
           to: userRecord.email,
           subject,
           html: bodyHtml,

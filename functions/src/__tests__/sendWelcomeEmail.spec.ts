@@ -96,7 +96,7 @@ describe('sendWelcomeEmail', () => {
     // Verify email was sent
     expect(sendEmailNotification).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: '"Spendless" <noreply@spendless.app>',
+        from: '"Spendless" <patrick@getspendless.com>',
         to: 'john.doe@example.com',
         subject: expect.stringContaining('John'),
         html: expect.any(String),

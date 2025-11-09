@@ -22,9 +22,9 @@ You know that feeling when you check your bank account and wonder where all your
 ### A few things you might like:
 
 - Works offline - track expenses anywhere, sync when you're back online
-- Your currency - track in USD, EUR, BRL, or whatever currency you use (more currencies coming soon)
+- Your currency - track in AUD, PHP USD, or EUR, (more currencies coming soon)
 - Customized tags - organize expenses your way with personalized categories
-- Mood tracking - optional, but eye-opening (ever notice how emotions affect spending?)
+- Mood tracking - coming soon, ever notice how emotions affect spending? 
 - Privacy first - no ads, no selling your data, ever
 
 There's no "right way" to use Spendless. Some people track everything, others just the big stuff. Do what works for you.

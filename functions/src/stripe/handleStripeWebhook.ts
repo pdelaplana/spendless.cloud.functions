@@ -273,6 +273,9 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
         `Successfully processed subscription.created for account ${accountId}: tier=${subscriptionTier}, status=${subscription.status}, expiresAt=${expiresAt ? expiresAt.toDate().toISOString() : null}`,
       );
     });
+
+    // Note: Premium subscription email will be sent automatically by the Firestore trigger
+    // when the subscriptionTier field is updated to 'premium'
   } catch (error) {
     console.error('Error handling subscription created:', error);
     throw error;
