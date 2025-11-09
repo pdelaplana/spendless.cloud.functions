@@ -83,10 +83,8 @@ jest.mock('../../config/stripe', () => ({
   getWebhookSecret: jest.fn().mockReturnValue('whsec_test_secret'),
 }));
 
-// Mock sendPremiumSubscriptionEmail
-jest.mock('../../sendPremiumSubscriptionEmail', () => ({
-  sendPremiumSubscriptionEmail: jest.fn().mockResolvedValue(undefined),
-}));
+// Note: sendPremiumSubscriptionEmail is a Firestore trigger that will fire automatically
+// when the subscriptionTier field is updated. No mocking needed here.
 
 import Sentry from '@sentry/node';
 // Import after mocks

@@ -3,7 +3,6 @@ import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
 import type Stripe from 'stripe';
 import { getWebhookSecret, stripe, stripeSecretKey, stripeWebhookSecret } from '../config/stripe';
-import { sendPremiumSubscriptionEmail } from '../sendPremiumSubscriptionEmail';
 import type { Account } from '../types';
 
 /**
@@ -154,8 +153,6 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
 
     const accountDoc = accountsSnapshot.docs[0];
     const accountId = accountDoc.id;
-    const initialAccountData = accountDoc.data() as Account;
-    const userId = initialAccountData.userId;
 
     // Process in transaction for atomicity
     await db.runTransaction(async (transaction) => {
@@ -277,24 +274,8 @@ async function handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
       );
     });
 
-    // Send premium subscription thank you email for active or trialing subscriptions
-    if (subscription.status === 'active' || subscription.status === 'trialing') {
-      try {
-        await sendPremiumSubscriptionEmail(userId);
-        console.log(`Premium subscription email queued for user ${userId}`);
-      } catch (error) {
-        // Log error but don't throw - email failures should not block webhook processing
-        console.error('Error sending premium subscription email:', error);
-        Sentry.captureException(error, {
-          extra: {
-            userId,
-            accountId,
-            subscriptionId: subscription.id,
-            operation: 'sendPremiumSubscriptionEmail',
-          },
-        });
-      }
-    }
+    // Note: Premium subscription email will be sent automatically by the Firestore trigger
+    // when the subscriptionTier field is updated to 'premium'
   } catch (error) {
     console.error('Error handling subscription created:', error);
     throw error;
