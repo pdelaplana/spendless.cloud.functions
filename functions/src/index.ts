@@ -13,3 +13,8 @@ export { createCheckoutSession } from './stripe/createCheckoutSession';
 export { createCustomerPortalSession } from './stripe/createCustomerPortalSession';
 export { handleStripeWebhook } from './stripe/handleStripeWebhook';
 export { cleanupProcessedEvents } from './stripe/cleanupProcessedEvents';
+
+// AI Checkin functions
+export { triggerAiCheckin } from './triggerAiCheckin';
+export { weeklyAiCheckin } from './scheduled/weeklyAiCheckin';
+export { periodEndAiCheckin } from './scheduled/periodEndAiCheckin';
