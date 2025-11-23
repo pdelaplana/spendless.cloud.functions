@@ -271,7 +271,7 @@ export const generateAiCheckin = async ({
           formattedInsights,
           generatedAt: admin.firestore.Timestamp.now(),
           emailStatus: 'pending',
-          aiModel: 'gemini-1.5-pro-latest',
+          aiModel: 'gemini-pro',
           tokensUsed,
         };
 

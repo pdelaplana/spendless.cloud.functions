@@ -43,9 +43,9 @@ export const getGemini = (): GoogleGenerativeAI => {
 
 /**
  * Get a Gemini model instance for generating content.
- * Default model: gemini-1.5-pro-latest (can be overridden)
+ * Default model: gemini-pro (Gemini 1.0 Pro - stable and widely available)
  */
-export const getGeminiModel = (modelName = 'gemini-1.5-pro-latest') => {
+export const getGeminiModel = (modelName = 'gemini-pro') => {
   const client = getGemini();
   return client.getGenerativeModel({ model: modelName });
 };
