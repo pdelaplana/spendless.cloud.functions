@@ -51,7 +51,8 @@ export const triggerAiCheckin = functions.https.onCall(
         }
 
         const account = accountSnapshot.data() as Account;
-        const accountId = account.id;
+        // Use document ID (userId) as accountId since they are the same in the accounts collection
+        const accountId = userId;
 
         // Check if user has active premium subscription
         const hasPremium = await hasActiveSubscription(accountId);
