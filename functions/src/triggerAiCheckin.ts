@@ -83,7 +83,7 @@ export const triggerAiCheckin = functions.https.onCall(
         }
 
         // Create job
-        const job: Job = {
+        const job: Job & { periodId?: string; analysisType?: 'weekly' | 'period-end' } = {
           userId,
           userEmail,
           jobType: 'generateAiCheckin',
@@ -93,10 +93,13 @@ export const triggerAiCheckin = functions.https.onCall(
           completedAt: null,
           errors: [],
           attempts: 0,
-          // Task-specific data
-          periodId: periodId || undefined,
           analysisType: analysisType || 'weekly',
-        } as Job & { periodId?: string; analysisType?: 'weekly' | 'period-end' };
+        };
+
+        // Add optional periodId only if provided (Firestore doesn't accept undefined values)
+        if (periodId) {
+          job.periodId = periodId;
+        }
 
         // Queue the job
         const jobRef = await db.collection('jobs').add(job);
