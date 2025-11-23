@@ -1,13 +1,13 @@
 # AI Checkin Email - Spending Insights
 
 ## Subject Line
-Your {periodName} Spending Insights are Ready!
+Checking In With Your Spending for {periodName}
 
 ## Email Body
 
-Hey {userName},
+{userName},
 
-Your AI-powered spending insights for **{periodName}** are here! 🎯
+We're checking in with your spending for **{periodName}**! 💙
 
 We've analyzed your spending patterns and put together some personalized insights to help you make smarter financial decisions.
 

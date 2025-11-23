@@ -3,6 +3,22 @@ import { getGeminiModel } from '../config/gemini';
 import type { AiInsightData } from '../types';
 
 /**
+ * Map internal category names to user-friendly display names
+ */
+export function getCategoryDisplayName(category: string): string {
+  const categoryMap: Record<string, string> = {
+    need: 'Essentials',
+    want: 'Rewards',
+    rituals: 'Rituals',
+    culture: 'Growth',
+    connections: 'Connections',
+    unexpected: 'Unexpected',
+  };
+
+  return categoryMap[category.toLowerCase()] || category;
+}
+
+/**
  * Spending data structure for AI analysis
  */
 export interface SpendingDataForAi {
@@ -58,19 +74,21 @@ export function formatSpendingDataForPrompt(
     prompt += `- Savings Goal: ${currency} ${currentPeriod.targetSavings.toFixed(2)}\n`;
   }
   if (currentPeriod.goals) {
-    prompt += `- Goals: ${currentPeriod.goals}\n`;
+    prompt += `- **Period Goal**: ${currentPeriod.goals}\n`;
+    prompt += '  (Remind the user of this goal in your analysis and recommendations)\n';
   }
   prompt += '\n';
 
   // Summary statistics
   const totalSpending = spending.reduce((sum, s) => sum + s.amount, 0);
   const allCategories = [...new Set(spending.map((s) => s.category))];
+  const allCategoriesDisplay = allCategories.map((c) => getCategoryDisplayName(c));
   const allTags = [...new Set(spending.flatMap((s) => s.tags || []))];
 
   prompt += '## Current Period Summary\n';
   prompt += `- Total Spending: ${currency} ${totalSpending.toFixed(2)}\n`;
   prompt += `- Number of Transactions: ${spending.length}\n`;
-  prompt += `- Categories: ${allCategories.join(', ')}\n`;
+  prompt += `- Categories: ${allCategoriesDisplay.join(', ')}\n`;
   prompt += `- Tags Used: ${allTags.length > 0 ? allTags.join(', ') : 'None'}\n`;
   prompt += '\n';
 
@@ -86,7 +104,9 @@ export function formatSpendingDataForPrompt(
   }
 
   // Detailed transactions (grouped by category)
-  prompt += '## Detailed Transactions\n\n';
+  prompt += '## Detailed Transactions\n';
+  prompt +=
+    '(Categories are mapped as: need=Essentials, want=Rewards, rituals=Rituals, culture=Growth, connections=Connections, unexpected=Unexpected)\n\n';
   const byCategory = spending.reduce(
     (acc, s) => {
       if (!acc[s.category]) {
@@ -100,7 +120,8 @@ export function formatSpendingDataForPrompt(
 
   for (const [category, transactions] of Object.entries(byCategory)) {
     const categoryTotal = transactions.reduce((sum, t) => sum + t.amount, 0);
-    prompt += `### ${category} (${currency} ${categoryTotal.toFixed(2)})\n`;
+    const displayName = getCategoryDisplayName(category);
+    prompt += `### ${displayName} (${currency} ${categoryTotal.toFixed(2)})\n`;
     for (const t of transactions) {
       const tagStr = t.tags && t.tags.length > 0 ? ` [${t.tags.join(', ')}]` : '';
       const recurringStr = t.recurring ? ' (Recurring)' : '';
@@ -143,14 +164,14 @@ Format your response as:
 - [Unusual item 2]
 
 ## 2. CATEGORY BREAKDOWN
-Analyze spending by category. Identify top 3-5 categories and assess budget performance.
+Analyze spending by category. IMPORTANT: Use the friendly category names (Essentials, Rewards, Rituals, Growth, Connections, Unexpected) in your analysis, NOT the internal category codes. Identify top 3-5 categories and assess budget performance.
 
 Format your response as:
 **Top Categories:**
-- [Category 1]: $[amount] ([percentage]% of total)
-- [Category 2]: $[amount] ([percentage]% of total)
-- [Category 3]: $[amount] ([percentage]% of total)
-**Budget Performance:** [Assessment of spending vs budget targets, if provided]
+- [Friendly Category Name]: $[amount] ([percentage]% of total)
+- [Friendly Category Name]: $[amount] ([percentage]% of total)
+- [Friendly Category Name]: $[amount] ([percentage]% of total)
+**Budget Performance:** [Assessment of spending vs budget targets. If a period goal was provided, reference how spending aligns with that goal]
 
 ## 3. TAG ANALYSIS
 Analyze spending patterns based on user-defined tags (if any tags present in data).
@@ -180,17 +201,19 @@ Format your response as:
 - [Concern 2]
 
 ## 5. ACTIONABLE RECOMMENDATIONS
-Provide 3-5 specific, actionable recommendations to improve spending habits.
+Provide 3-5 specific, actionable recommendations to improve spending habits. If a period goal was provided, tailor recommendations to help the user achieve that goal.
 
 Format your response as:
 **Recommendations:**
-1. [Specific action the user can take]
+1. [Specific action the user can take, relating to their period goal if provided]
 2. [Specific action the user can take]
 3. [Specific action the user can take]
 4. [Specific action the user can take]
 5. [Specific action the user can take]
 
 IMPORTANT:
+- Use friendly category names (Essentials, Rewards, Rituals, Growth, Connections, Unexpected) in your recommendations
+- If a period goal was provided, explicitly reference it and suggest actions aligned with achieving that goal
 - Be specific and reference actual amounts, categories, and tags from the data
 - Keep insights concise and actionable
 - Use the exact currency symbol provided in the data

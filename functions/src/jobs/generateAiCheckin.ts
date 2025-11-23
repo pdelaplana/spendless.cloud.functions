@@ -49,18 +49,57 @@ async function loadAiCheckinEmailTemplate(
       .replace(/{userName}/g, userName)
       .replace(/{insights}/g, insights);
 
-    // Convert markdown to HTML (basic conversion)
-    const htmlBody = body
-      .replace(/### (.+)/g, '<h3>$1</h3>')
-      .replace(/## (.+)/g, '<h2>$1</h2>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/^- (.+)/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/^(.+)$/gm, '<p>$1</p>');
+    // Convert markdown to HTML (improved conversion)
+    let htmlBody = body;
 
-    return { subject, html: htmlBody };
+    // Convert headers (must be done before paragraphs)
+    htmlBody = htmlBody.replace(
+      /^### (.+)$/gm,
+      '<h3 style="color: #1a73e8; margin-top: 24px; margin-bottom: 12px; font-size: 18px;">$1</h3>',
+    );
+    htmlBody = htmlBody.replace(
+      /^## (.+)$/gm,
+      '<h2 style="color: #1a73e8; margin-top: 32px; margin-bottom: 16px; font-size: 24px;">$2</h2>',
+    );
+    htmlBody = htmlBody.replace(
+      /^# (.+)$/gm,
+      '<h1 style="color: #1a73e8; margin-top: 32px; margin-bottom: 16px; font-size: 28px;">$1</h1>',
+    );
+
+    // Convert bold and italic
+    htmlBody = htmlBody.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    htmlBody = htmlBody.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Convert lists (improved to handle multiple lists)
+    htmlBody = htmlBody.replace(/^- (.+)$/gm, '<li style="margin-bottom: 8px;">$1</li>');
+    htmlBody = htmlBody.replace(/^(\d+)\. (.+)$/gm, '<li style="margin-bottom: 8px;">$2</li>');
+
+    // Wrap consecutive <li> tags in <ul>
+    htmlBody = htmlBody.replace(/(<li[^>]*>.*?<\/li>\s*)+/gs, (match) => {
+      return `<ul style="margin: 16px 0; padding-left: 24px; line-height: 1.6;">${match}</ul>`;
+    });
+
+    // Convert horizontal rules
+    htmlBody = htmlBody.replace(
+      /^---$/gm,
+      '<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">',
+    );
+
+    // Convert line breaks and paragraphs
+    htmlBody = htmlBody.replace(/\n\n+/g, '</p><p style="margin: 12px 0; line-height: 1.6;">');
+    htmlBody = `<p style="margin: 12px 0; line-height: 1.6;">${htmlBody}</p>`;
+
+    // Clean up empty paragraphs
+    htmlBody = htmlBody.replace(/<p[^>]*>\s*<\/p>/g, '');
+
+    // Wrap in a container with proper styling
+    const styledHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        ${htmlBody}
+      </div>
+    `;
+
+    return { subject, html: styledHtml };
   } catch (_error) {
     // Fallback if template doesn't exist
     console.warn('AI checkin email template not found, using fallback');
@@ -281,10 +320,14 @@ export const generateAiCheckin = async ({
 
         // Send email
         try {
+          // Get user's display name from Firebase Auth
+          const user = await admin.auth().getUser(userId);
+          const userName = user.displayName || 'Hey there';
+
           const { subject, html } = await loadAiCheckinEmailTemplate(
             formattedInsights,
             periodData.name,
-            account.name,
+            userName,
           );
 
           await sendEmailNotification({
