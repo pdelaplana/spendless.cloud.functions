@@ -324,25 +324,22 @@ export function parseAiResponse(aiResponse: string, _currency = 'USD'): AiInsigh
     patterns: {
       summary: patternsSummary || 'Spending analysis completed',
       trends: trends.length > 0 ? trends : ['No significant trends identified'],
-      unusualSpending: unusualSpending.length > 0 ? unusualSpending : undefined,
+      unusualSpending: unusualSpending.length > 0 ? unusualSpending : [],
     },
     categories: {
       topCategories,
-      budgetPerformance: budgetPerformance || undefined,
+      budgetPerformance: budgetPerformance || '',
     },
-    comparison:
-      comparisonSummary || improvements.length > 0 || concerns.length > 0
-        ? {
-            summary: comparisonSummary || 'No comparison data available',
-            improvements: improvements.length > 0 ? improvements : undefined,
-            concerns: concerns.length > 0 ? concerns : undefined,
-          }
-        : undefined,
+    comparison: {
+      summary: comparisonSummary || 'No comparison data available',
+      improvements: improvements.length > 0 ? improvements : [],
+      concerns: concerns.length > 0 ? concerns : [],
+    },
     tags: {
       topTags,
-      tagTrends: tagTrends.length > 0 ? tagTrends : undefined,
-      tagCorrelations: tagCorrelations.length > 0 ? tagCorrelations : undefined,
-      budgetRecommendations: tagRecommendations.length > 0 ? tagRecommendations : undefined,
+      tagTrends: tagTrends.length > 0 ? tagTrends : [],
+      tagCorrelations: tagCorrelations.length > 0 ? tagCorrelations : [],
+      budgetRecommendations: tagRecommendations.length > 0 ? tagRecommendations : [],
     },
     recommendations:
       recommendations.length > 0 ? recommendations : ['Continue tracking your spending regularly'],
