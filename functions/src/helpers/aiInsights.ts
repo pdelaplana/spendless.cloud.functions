@@ -469,8 +469,8 @@ export async function generateAiInsights(
       // Build complete prompt
       const prompt = buildAiPrompt(formattedData);
 
-      // Get Gemini model
-      const model = getGeminiModel('gemini-1.5-pro');
+      // Get Gemini model (uses gemini-1.5-pro-latest by default)
+      const model = getGeminiModel();
 
       // Generate content
       const result = await model.generateContent(prompt);
