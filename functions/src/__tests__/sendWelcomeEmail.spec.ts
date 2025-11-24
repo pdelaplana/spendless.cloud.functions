@@ -34,9 +34,9 @@ jest.mock('@sentry/node', () => ({
   captureMessage: jest.fn(),
 }));
 
-// Mock fs for template loading
-jest.mock('node:fs', () => ({
-  readFileSync: jest.fn().mockReturnValue(`
+// Mock fs/promises for template loading
+jest.mock('node:fs/promises', () => ({
+  readFile: jest.fn().mockResolvedValue(`
 # Welcome Email - New User
 
 ## Subject Line
@@ -48,9 +48,27 @@ Hey {firstName},
 
 Thanks for signing up! I'm glad you're here.
 
+You know that feeling when you check your bank account and wonder where all your money went? Yeah, we've all been there. That's why I built Spendless - to help you actually understand your spending without the guilt trip.
+
 ### Here's how to get rolling:
 
 **Create a period** - Pick how you want to track your spending: weekly, monthly, or whatever works for you.
+
+**Set up your wallets** - Create as many wallets as you need. Personal spending, groceries, business expenses - you name it. Set a spending limit for each one, and the app will help you stay on track.
+
+**Start tracking** - Add your first expense. That coffee, lunch, or whatever you just bought. Takes like 10 seconds. You'll see how much of your limit is left.
+
+### A few things you might like:
+
+- Works offline - track expenses anywhere, sync when you're back online
+- Your currency - track in AUD, PHP USD, or EUR, (more currencies coming soon)
+- Customized tags - organize expenses your way with personalized categories
+- Mood tracking - coming soon, ever notice how emotions affect spending?
+- Privacy first - no ads, no selling your data, ever
+
+There's no "right way" to use Spendless. Some people track everything, others just the big stuff. Do what works for you.
+
+One more thing - Spendless is actively being developed and improved. Your feedback shapes what gets built next. Found a bug? Have an idea? Want something to work differently? Just send me an email. I actually read these and they matter.
 
 Cheers,
 {founderName}
@@ -58,12 +76,30 @@ Founder, Spendless
 
 P.S. - Start simple. You can always add more detail later.
 
-© {currentYear} Spendless. All rights reserved.
-
 ---
 
 ## Email Footer
+
+© {currentYear} Spendless. All rights reserved.
+
+[Privacy Policy] | [Terms of Service] | [Help Center]
   `),
+}));
+
+// Mock marked for markdown conversion
+jest.mock('marked', () => ({
+  marked: {
+    parse: jest.fn().mockImplementation((markdown: string) => {
+      // Simple mock that converts markdown to basic HTML
+      let html = markdown;
+      html = html.replace(/### (.+)/g, '<h3>$1</h3>');
+      html = html.replace(/## (.+)/g, '<h2>$1</h2>');
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\n\n/g, '</p><p>');
+      return Promise.resolve(`<p>${html}</p>`);
+    }),
+    use: jest.fn(),
+  },
 }));
 
 // Import after mocks are set up
@@ -111,7 +147,6 @@ describe('sendWelcomeEmail', () => {
     // Verify the body contains replaced variables
     expect(emailCall.html).toContain('John');
     expect(emailCall.html).toContain('Patrick');
-    expect(emailCall.html).toContain(new Date().getFullYear().toString());
   });
 
   it('should use "there" as fallback when displayName is undefined', async () => {
@@ -286,12 +321,10 @@ describe('sendWelcomeEmail', () => {
     // Verify all variables were replaced
     expect(emailCall.html).toContain('Alice');
     expect(emailCall.html).toContain('Patrick');
-    expect(emailCall.html).toContain(new Date().getFullYear().toString());
 
     // Verify no placeholders remain
     expect(emailCall.html).not.toContain('{firstName}');
     expect(emailCall.html).not.toContain('{founderName}');
-    expect(emailCall.html).not.toContain('{currentYear}');
   });
 
   it('should convert markdown to HTML', async () => {
