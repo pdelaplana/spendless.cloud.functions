@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import Sentry from '@sentry/node';
 import admin from 'firebase-admin';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { convertMarkdownToHtml, replaceTemplateVariables } from './helpers/emailMarkdown';
 import { sendEmailNotification } from './helpers/sendEmail';
 
 /**
@@ -39,47 +40,6 @@ function loadEmailTemplate(): { subject: string; body: string } {
   const body = bodyMatch ? bodyMatch[1].trim() : '';
 
   return { subject, body };
-}
-
-/**
- * Replaces template variables with actual values
- * @param template - Template string with {variable} placeholders
- * @param variables - Object mapping variable names to values
- * @returns Processed template with variables replaced
- */
-function replaceTemplateVariables(template: string, variables: Record<string, string>): string {
-  let result = template;
-  for (const [key, value] of Object.entries(variables)) {
-    const regex = new RegExp(`\\{${key}\\}`, 'g');
-    result = result.replace(regex, value);
-  }
-  return result;
-}
-
-/**
- * Converts markdown-style text to simple HTML
- * @param markdown - Markdown text
- * @returns HTML string
- */
-function convertMarkdownToHtml(markdown: string): string {
-  let html = markdown;
-
-  // Convert headers (### Header -> <h3>Header</h3>)
-  html = html.replace(/### (.+)/g, '<h3>$1</h3>');
-  html = html.replace(/## (.+)/g, '<h2>$1</h2>');
-  html = html.replace(/# (.+)/g, '<h1>$1</h1>');
-
-  // Convert bold (**text** -> <strong>text</strong>)
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-  // Convert line breaks to <br> and paragraphs
-  html = html.replace(/\n\n/g, '</p><p>');
-  html = html.replace(/\n/g, '<br>');
-
-  // Wrap in paragraph tags
-  html = `<p>${html}</p>`;
-
-  return html;
 }
 
 /**
@@ -141,7 +101,7 @@ export const sendPremiumSubscriptionEmail = onDocumentUpdated(
             const bodyMarkdown = replaceTemplateVariables(template.body, variables);
 
             // Convert markdown to HTML
-            const bodyHtml = convertMarkdownToHtml(bodyMarkdown);
+            const bodyHtml = await convertMarkdownToHtml(bodyMarkdown);
 
             // Send email via Mailgun
             await sendEmailNotification({

@@ -7,6 +7,7 @@ import {
   type SpendingDataForAi,
   generateAiInsights,
 } from '../helpers/aiInsights';
+import { convertMarkdownToHtml, replaceTemplateVariables } from '../helpers/emailMarkdown';
 import { sendEmailNotification } from '../helpers/sendEmail';
 import { hasActiveSubscription } from '../stripe/helpers';
 import type { Account, AiInsight } from '../types';
@@ -41,77 +42,36 @@ async function loadAiCheckinEmailTemplate(
       }
     }
 
-    // Replace variables
-    subject = subject.replace(/{periodName}/g, periodName).replace(/{userName}/g, userName);
+    // Replace variables using shared helper
+    const variables = {
+      periodName,
+      userName,
+      insights,
+    };
 
-    body = body
-      .replace(/{periodName}/g, periodName)
-      .replace(/{userName}/g, userName)
-      .replace(/{insights}/g, insights);
+    subject = replaceTemplateVariables(subject, variables);
+    body = replaceTemplateVariables(body, variables);
 
-    // Convert markdown to HTML (improved conversion)
-    let htmlBody = body;
+    // Convert markdown to HTML using shared helper
+    const html = await convertMarkdownToHtml(body);
 
-    // Convert headers (must be done before paragraphs)
-    htmlBody = htmlBody.replace(
-      /^### (.+)$/gm,
-      '<h3 style="color: #1a73e8; margin-top: 24px; margin-bottom: 12px; font-size: 18px;">$1</h3>',
-    );
-    htmlBody = htmlBody.replace(
-      /^## (.+)$/gm,
-      '<h2 style="color: #1a73e8; margin-top: 32px; margin-bottom: 16px; font-size: 24px;">$2</h2>',
-    );
-    htmlBody = htmlBody.replace(
-      /^# (.+)$/gm,
-      '<h1 style="color: #1a73e8; margin-top: 32px; margin-bottom: 16px; font-size: 28px;">$1</h1>',
-    );
-
-    // Convert bold and italic
-    htmlBody = htmlBody.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    htmlBody = htmlBody.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    // Convert lists (improved to handle multiple lists)
-    htmlBody = htmlBody.replace(/^- (.+)$/gm, '<li style="margin-bottom: 8px;">$1</li>');
-    htmlBody = htmlBody.replace(/^(\d+)\. (.+)$/gm, '<li style="margin-bottom: 8px;">$2</li>');
-
-    // Wrap consecutive <li> tags in <ul>
-    htmlBody = htmlBody.replace(/(<li[^>]*>.*?<\/li>\s*)+/gs, (match) => {
-      return `<ul style="margin: 16px 0; padding-left: 24px; line-height: 1.6;">${match}</ul>`;
-    });
-
-    // Convert horizontal rules
-    htmlBody = htmlBody.replace(
-      /^---$/gm,
-      '<hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">',
-    );
-
-    // Convert line breaks and paragraphs
-    htmlBody = htmlBody.replace(/\n\n+/g, '</p><p style="margin: 12px 0; line-height: 1.6;">');
-    htmlBody = `<p style="margin: 12px 0; line-height: 1.6;">${htmlBody}</p>`;
-
-    // Clean up empty paragraphs
-    htmlBody = htmlBody.replace(/<p[^>]*>\s*<\/p>/g, '');
-
-    // Wrap in a container with proper styling
-    const styledHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-        ${htmlBody}
-      </div>
-    `;
-
-    return { subject, html: styledHtml };
+    return { subject, html };
   } catch (_error) {
     // Fallback if template doesn't exist
     console.warn('AI checkin email template not found, using fallback');
     return {
       subject: `Your ${periodName} Spending Insights`,
-      html: `
-        <h2>Your ${periodName} Spending Insights</h2>
-        <p>Hi ${userName},</p>
-        <p>Here are your AI-generated spending insights:</p>
-        ${insights.replace(/\n/g, '<br>')}
-        <p>Keep up the great work managing your spending!</p>
-      `,
+      html: await convertMarkdownToHtml(`
+## Your ${periodName} Spending Insights
+
+Hi ${userName},
+
+Here are your AI-generated spending insights:
+
+${insights}
+
+Keep up the great work managing your spending!
+      `),
     };
   }
 }
