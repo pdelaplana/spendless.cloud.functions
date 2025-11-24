@@ -374,10 +374,10 @@ export function parseAiResponse(aiResponse: string, _currency = 'USD'): AiInsigh
  */
 export function formatInsightsAsMarkdown(
   insights: AiInsightData,
-  periodName: string,
+  _periodName: string,
   currency = 'USD',
 ): string {
-  let markdown = ``;
+  let markdown = '';
 
   // Patterns section
   markdown += '## 📊 Spending Patterns & Trends\n\n';
