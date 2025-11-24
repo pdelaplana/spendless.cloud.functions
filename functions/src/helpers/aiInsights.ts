@@ -377,7 +377,7 @@ export function formatInsightsAsMarkdown(
   periodName: string,
   currency = 'USD',
 ): string {
-  let markdown = `# Your Spending Insights: ${periodName}\n\n`;
+  let markdown = ``;
 
   // Patterns section
   markdown += '## 📊 Spending Patterns & Trends\n\n';

@@ -46,6 +46,7 @@ export const processJob = onDocumentCreated(
               userEmail: job.userEmail,
               periodId: (job as Job & { periodId?: string }).periodId,
               analysisType: (job as Job & { analysisType?: 'weekly' | 'period-end' }).analysisType,
+              date: (job as Job & { date?: string }).date,
             });
             break;
           default:
