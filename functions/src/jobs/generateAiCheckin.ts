@@ -60,13 +60,12 @@ async function loadAiCheckinEmailTemplate(
     // Fallback if template doesn't exist
     console.warn('AI checkin email template not found, using fallback');
     return {
-      subject: `Your ${periodName} Spending Insights`,
+      subject: `Check in with your spending for ${periodName}`,
       html: await convertMarkdownToHtml(`
-## Your ${periodName} Spending Insights
 
 Hi ${userName},
 
-Here are your AI-generated spending insights:
+Here are some insights about your spending for ${periodName}:
 
 ${insights}
 
@@ -79,17 +78,25 @@ Keep up the great work managing your spending!
 /**
  * Generate AI Checkin for a user
  * This job fetches spending data, analyzes it with AI, stores insights, and sends an email
+ *
+ * @param userId - User ID
+ * @param userEmail - User email
+ * @param analysisType - Type of analysis ('weekly' or 'period-end')
+ * @param date - For weekly analysis: end date of the week to analyze (ISO string)
+ * @param periodId - For period-end analysis: ID of the period to analyze
  */
 export const generateAiCheckin = async ({
   userId,
   userEmail,
   periodId,
   analysisType,
+  date,
 }: {
   userId: string;
   userEmail: string;
   periodId?: string;
   analysisType?: 'weekly' | 'period-end';
+  date?: string;
 }) => {
   return Sentry.startSpan(
     { name: 'generateAiCheckin', op: 'function.job.generateAiCheckin' },
@@ -126,7 +133,7 @@ export const generateAiCheckin = async ({
         // Determine analysis type
         const finalAnalysisType: 'weekly' | 'period-end' = analysisType || 'weekly';
 
-        // Get periods
+        // Get periods for context
         const periodsSnapshot = await accountRef
           .collection('periods')
           .orderBy('startAt', 'desc')
@@ -137,30 +144,86 @@ export const generateAiCheckin = async ({
           throw new Error('No periods found for this account.');
         }
 
-        // Determine which period to analyze
-        let currentPeriod: FirebaseFirestore.QueryDocumentSnapshot;
-        if (periodId) {
+        // Variables to be set based on analysis type
+        let spendingSnapshot: FirebaseFirestore.QuerySnapshot;
+        let periodName: string;
+        let analyzedPeriodId: string;
+        let periodStartDate: Date;
+        let periodEndDate: Date;
+        let targetSpend: number | undefined;
+        let targetSavings: number | undefined;
+        let goals: string | undefined;
+
+        if (finalAnalysisType === 'weekly') {
+          // WEEKLY ANALYSIS: Analyze spending from the last 7 days
+
+          // Get the analysis date (end of week)
+          const endDate = date ? new Date(date) : new Date();
+
+          // Calculate start date (7 days before end date)
+          const startDate = new Date(endDate);
+          startDate.setDate(startDate.getDate() - 7);
+
+          // Format period name as "Week of [start] - [end]"
+          const formatDate = (d: Date) => {
+            const month = d.toLocaleDateString('en-US', { month: 'short' });
+            const day = d.getDate();
+            return `${month} ${day}`;
+          };
+          periodName = `Week of ${formatDate(startDate)} - ${formatDate(endDate)}`;
+
+          // Query spending by date range (not by periodId)
+          const startTimestamp = admin.firestore.Timestamp.fromDate(startDate);
+          const endTimestamp = admin.firestore.Timestamp.fromDate(endDate);
+
+          spendingSnapshot = await accountRef
+            .collection('spending')
+            .where('date', '>=', startTimestamp)
+            .where('date', '<=', endTimestamp)
+            .orderBy('date', 'desc')
+            .get();
+
+          // Use most recent period for context (goals, targets, etc.)
+          const contextPeriod = periods[0];
+          const contextPeriodData = contextPeriod.data();
+          analyzedPeriodId = contextPeriod.id;
+          periodStartDate = startDate;
+          periodEndDate = endDate;
+          targetSpend = contextPeriodData.targetSpend;
+          targetSavings = contextPeriodData.targetSavings;
+          goals = contextPeriodData.goals;
+        } else {
+          // PERIOD-END ANALYSIS: Analyze all spending for a specific period
+
+          if (!periodId) {
+            throw new Error('Period ID is required for period-end analysis.');
+          }
+
+          // Find the specific period
           const found = periods.find((p) => p.id === periodId);
           if (!found) {
             throw new Error(`Period ${periodId} not found.`);
           }
-          currentPeriod = found;
-        } else {
-          // Use most recent period
-          currentPeriod = periods[0];
+
+          const periodData = found.data();
+          analyzedPeriodId = found.id;
+          periodName = periodData.name;
+          periodStartDate = periodData.startAt.toDate();
+          periodEndDate = periodData.endAt.toDate();
+          targetSpend = periodData.targetSpend;
+          targetSavings = periodData.targetSavings;
+          goals = periodData.goals;
+
+          // Query all spending for this period
+          spendingSnapshot = await accountRef
+            .collection('spending')
+            .where('periodId', '==', periodId)
+            .orderBy('date', 'desc')
+            .get();
         }
 
-        const periodData = currentPeriod.data();
-
-        // Get spending data for the current period
-        const spendingSnapshot = await accountRef
-          .collection('spending')
-          .where('periodId', '==', currentPeriod.id)
-          .orderBy('date', 'desc')
-          .get();
-
         if (spendingSnapshot.empty) {
-          throw new Error('No spending data found for this period.');
+          throw new Error('No spending data found for the analysis period.');
         }
 
         // Format spending data for AI
@@ -179,12 +242,12 @@ export const generateAiCheckin = async ({
 
         // Prepare period info
         const periodInfo: PeriodInfoForAi = {
-          name: periodData.name,
-          startDate: periodData.startAt.toDate(),
-          endDate: periodData.endAt.toDate(),
-          targetSpend: periodData.targetSpend,
-          targetSavings: periodData.targetSavings,
-          goals: periodData.goals,
+          name: periodName,
+          startDate: periodStartDate,
+          endDate: periodEndDate,
+          targetSpend,
+          targetSavings,
+          goals,
         };
 
         // Get historical data from previous period for comparison
@@ -257,10 +320,10 @@ export const generateAiCheckin = async ({
         const insightData: Omit<AiInsight, 'id'> = {
           userId,
           accountId,
-          periodId: currentPeriod.id,
-          periodName: periodData.name,
-          periodStartDate: periodData.startAt,
-          periodEndDate: periodData.endAt,
+          periodId: analyzedPeriodId,
+          periodName,
+          periodStartDate: admin.firestore.Timestamp.fromDate(periodStartDate),
+          periodEndDate: admin.firestore.Timestamp.fromDate(periodEndDate),
           analysisType: finalAnalysisType,
           totalSpendingAnalyzed: totalSpending,
           transactionCount: spendingData.length,
@@ -286,7 +349,7 @@ export const generateAiCheckin = async ({
 
           const { subject, html } = await loadAiCheckinEmailTemplate(
             formattedInsights,
-            periodData.name,
+            periodName,
             userName,
           );
 

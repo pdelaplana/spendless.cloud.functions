@@ -92,7 +92,8 @@ export const weeklyAiCheckin = functions.scheduler.onSchedule(
                 attempts: 0,
                 // Task-specific data
                 analysisType: 'weekly',
-              } as Job & { analysisType: 'weekly' };
+                date: new Date().toISOString(), // Current date for weekly analysis
+              } as Job & { analysisType: 'weekly'; date: string };
 
               // Queue the job
               const jobRef = await db.collection('jobs').add(job);

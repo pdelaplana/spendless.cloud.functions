@@ -17,6 +17,10 @@ export type Job = {
   completedAt: Timestamp | null;
   errors: string[];
   attempts: number;
+  // Optional task-specific fields
+  periodId?: string; // For generateAiCheckin with period-end analysis
+  analysisType?: 'weekly' | 'period-end'; // For generateAiCheckin
+  date?: string; // For generateAiCheckin with weekly analysis (ISO string)
 };
 
 // Stripe-related types

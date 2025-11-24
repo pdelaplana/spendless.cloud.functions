@@ -11,8 +11,9 @@ import type { Account, Job } from './types';
  * This function queues a job that will generate AI insights for the user's spending data.
  *
  * Input (optional):
- * - periodId: string (optional) - Specific period to analyze. If not provided, uses most recent period.
  * - analysisType: 'weekly' | 'period-end' (optional) - Type of analysis. Defaults to 'weekly'.
+ * - date: string (optional) - For 'weekly' analysis: end date of the week to analyze (ISO format). Defaults to current date.
+ * - periodId: string (required for 'period-end') - Specific period to analyze for period-end analysis.
  *
  * Returns:
  * - success: boolean
@@ -72,18 +73,50 @@ export const triggerAiCheckin = functions.https.onCall(
         }
 
         // Extract optional parameters
-        const { periodId, analysisType } = request.data || {};
+        const { periodId, analysisType, date } = request.data || {};
 
         // Validate analysisType if provided
-        if (analysisType && analysisType !== 'weekly' && analysisType !== 'period-end') {
+        const finalAnalysisType: 'weekly' | 'period-end' = analysisType || 'weekly';
+        if (finalAnalysisType !== 'weekly' && finalAnalysisType !== 'period-end') {
           throw new functions.https.HttpsError(
             'invalid-argument',
             'Analysis type must be either "weekly" or "period-end".',
           );
         }
 
+        // Validate parameters based on analysis type
+        if (finalAnalysisType === 'period-end' && !periodId) {
+          throw new functions.https.HttpsError(
+            'invalid-argument',
+            'Period ID is required for period-end analysis.',
+          );
+        }
+
+        // For weekly analysis, use provided date or default to current date
+        let analysisDate: string | undefined;
+        if (finalAnalysisType === 'weekly') {
+          if (date) {
+            // Validate date format (ISO string)
+            const parsedDate = new Date(date);
+            if (Number.isNaN(parsedDate.getTime())) {
+              throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Invalid date format. Please provide an ISO date string.',
+              );
+            }
+            analysisDate = date;
+          } else {
+            // Default to current date
+            analysisDate = new Date().toISOString();
+          }
+        }
+
         // Create job
-        const job: Job & { periodId?: string; analysisType?: 'weekly' | 'period-end' } = {
+        const job: Job & {
+          periodId?: string;
+          analysisType?: 'weekly' | 'period-end';
+          date?: string;
+        } = {
           userId,
           userEmail,
           jobType: 'generateAiCheckin',
@@ -93,12 +126,15 @@ export const triggerAiCheckin = functions.https.onCall(
           completedAt: null,
           errors: [],
           attempts: 0,
-          analysisType: analysisType || 'weekly',
+          analysisType: finalAnalysisType,
         };
 
-        // Add optional periodId only if provided (Firestore doesn't accept undefined values)
+        // Add optional fields only if provided (Firestore doesn't accept undefined values)
         if (periodId) {
           job.periodId = periodId;
+        }
+        if (analysisDate) {
+          job.date = analysisDate;
         }
 
         // Queue the job
