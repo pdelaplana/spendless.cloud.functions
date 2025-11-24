@@ -3,9 +3,9 @@
  * Uses inline styles since many email clients don't support <style> tags
  */
 const EMAIL_STYLES = {
-  h1: 'color: #1a73e8; margin-top: 32px; margin-bottom: 16px; font-size: 28px; font-weight: 600;',
-  h2: 'color: #1a73e8; margin-top: 32px; margin-bottom: 16px; font-size: 24px; font-weight: 600;',
-  h3: 'color: #1a73e8; margin-top: 24px; margin-bottom: 12px; font-size: 18px; font-weight: 600;',
+  h1: 'color: #8B5FBF; margin-top: 32px; margin-bottom: 16px; font-size: 28px; font-weight: 600;',
+  h2: 'color: #8B5FBF; margin-top: 32px; margin-bottom: 16px; font-size: 24px; font-weight: 600;',
+  h3: 'color: #8B5FBF; margin-top: 24px; margin-bottom: 12px; font-size: 18px; font-weight: 600;',
   p: 'margin: 12px 0; line-height: 1.6; color: #333;',
   ul: 'margin: 16px 0; padding-left: 24px; line-height: 1.6;',
   ol: 'margin: 16px 0; padding-left: 24px; line-height: 1.6;',
@@ -14,7 +14,7 @@ const EMAIL_STYLES = {
   strong: 'font-weight: 600;',
   em: 'font-style: italic;',
   container:
-    'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;',
+    'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;',
 };
 
 // Lazy-loaded marked instance

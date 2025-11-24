@@ -417,7 +417,7 @@ export const generateAiCheckin = async ({
           );
 
           await sendEmailNotification({
-            from: '"Spendless AI Insights" <insights@spendless.app>',
+            from: '"Spendless AI Insights" <no-reply@getspendless.com>',
             to: userEmail,
             subject,
             html,

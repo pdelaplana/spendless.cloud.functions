@@ -401,10 +401,10 @@ export function formatInsightsAsMarkdown(
   markdown += '\n';
 
   // Categories section
-  markdown += '## 💰 Category Breakdown\n\n';
+  markdown += '## 💭 Category Breakdown\n\n';
   markdown += '**Top Categories:**\n';
   for (const cat of insights.categories.topCategories) {
-    markdown += `- **${cat.category}**: ${currency} ${cat.amount.toFixed(2)} (${cat.percentage}% of total)\n`;
+    markdown += `- **${cat.category}** \n`;
   }
   if (insights.categories.budgetPerformance) {
     markdown += `\n**Budget Performance:** ${insights.categories.budgetPerformance}\n`;
@@ -416,7 +416,7 @@ export function formatInsightsAsMarkdown(
     markdown += '## 🏷️ Tag Analysis\n\n';
     markdown += '**Top Tags:**\n';
     for (const tag of insights.tags.topTags) {
-      markdown += `- **${tag.tag}**: ${currency} ${tag.totalSpending.toFixed(2)} (${tag.transactionCount} transactions, ${tag.percentage}%)\n`;
+      markdown += `- **${tag.tag}** \n`;
     }
 
     if (insights.tags.tagTrends && insights.tags.tagTrends.length > 0) {
