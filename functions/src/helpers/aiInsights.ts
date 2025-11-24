@@ -139,7 +139,12 @@ export function formatSpendingDataForPrompt(
 /**
  * Build the complete AI prompt for generating insights
  */
-export function buildAiPrompt(formattedData: string): string {
+export function buildAiPrompt(
+  formattedData: string,
+  analysisType: 'weekly' | 'period-end' = 'weekly',
+): string {
+  const comparisonContext = analysisType === 'weekly' ? 'previous week' : 'previous period';
+
   return `${formattedData}
 
 # Analysis Task
@@ -180,7 +185,7 @@ Format your response as:
 **Top Tags:**
 - [Tag 1]: $[amount] ([count] transactions, [percentage]% of total)
 - [Tag 2]: $[amount] ([count] transactions, [percentage]% of total)
-**Tag Trends (vs previous period if data available):**
+**Tag Trends (vs ${comparisonContext} if data available):**
 - [Tag]: [increasing/decreasing/stable] by [X]%
 **Tag Correlations (tags that frequently appear together):**
 - [Tag 1] + [Tag 2]: [count] transactions, $[amount]
@@ -188,8 +193,8 @@ Format your response as:
 - [Recommendation 1]
 - [Recommendation 2]
 
-## 4. PERIOD COMPARISON (if historical data provided)
-Compare current period to previous period. Highlight improvements and concerns.
+## 4. ${analysisType === 'weekly' ? 'WEEK-OVER-WEEK' : 'PERIOD'} COMPARISON (if historical data provided)
+Compare current ${analysisType === 'weekly' ? 'week' : 'period'} to ${comparisonContext}. Highlight improvements and concerns.
 
 Format your response as:
 **Summary:** [Overall comparison in one sentence]
@@ -218,7 +223,7 @@ IMPORTANT:
 - Keep insights concise and actionable
 - Use the exact currency symbol provided in the data
 - If no tags are present, omit the Tag Analysis section
-- If no historical data is provided, omit the Period Comparison section
+- If no historical data is provided, omit the ${analysisType === 'weekly' ? 'Week-over-Week' : 'Period'} Comparison section
 - Focus on being helpful and encouraging, not judgmental`;
 }
 
@@ -376,6 +381,7 @@ export function formatInsightsAsMarkdown(
   insights: AiInsightData,
   _periodName: string,
   currency = 'USD',
+  analysisType: 'weekly' | 'period-end' = 'weekly',
 ): string {
   let markdown = '';
 
@@ -440,7 +446,9 @@ export function formatInsightsAsMarkdown(
 
   // Comparison section (if present)
   if (insights.comparison) {
-    markdown += '## 📈 Period Comparison\n\n';
+    const comparisonTitle =
+      analysisType === 'weekly' ? 'Week-over-Week Comparison' : 'Period Comparison';
+    markdown += `## 📈 ${comparisonTitle}\n\n`;
     markdown += `${insights.comparison.summary}\n\n`;
     if (insights.comparison.improvements && insights.comparison.improvements.length > 0) {
       markdown += '**✅ Improvements:**\n';
@@ -475,6 +483,7 @@ export async function generateAiInsights(
   currentPeriod: PeriodInfoForAi,
   historicalData?: HistoricalDataForAi,
   currency = 'USD',
+  analysisType: 'weekly' | 'period-end' = 'weekly',
 ): Promise<{ insights: AiInsightData; formattedInsights: string; tokensUsed?: number }> {
   return Sentry.startSpan({ name: 'generateAiInsights', op: 'ai.generation' }, async () => {
     try {
@@ -487,7 +496,7 @@ export async function generateAiInsights(
       );
 
       // Build complete prompt
-      const prompt = buildAiPrompt(formattedData);
+      const prompt = buildAiPrompt(formattedData, analysisType);
 
       // Get Gemini model (uses gemini-1.5-pro-latest by default)
       const model = getGeminiModel();
@@ -501,7 +510,12 @@ export async function generateAiInsights(
       const insights = parseAiResponse(text, currency);
 
       // Generate formatted markdown
-      const formattedInsights = formatInsightsAsMarkdown(insights, currentPeriod.name, currency);
+      const formattedInsights = formatInsightsAsMarkdown(
+        insights,
+        currentPeriod.name,
+        currency,
+        analysisType,
+      );
 
       // Get token usage if available
       const tokensUsed = response.usageMetadata?.totalTokenCount;

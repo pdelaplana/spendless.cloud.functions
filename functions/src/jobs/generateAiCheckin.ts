@@ -250,17 +250,28 @@ export const generateAiCheckin = async ({
           goals,
         };
 
-        // Get historical data from previous period for comparison
+        // Get historical data for comparison
         let historicalData: HistoricalDataForAi | undefined;
-        if (periods.length > 1) {
-          const previousPeriod = periods[1];
-          const prevSpendingSnapshot = await accountRef
+
+        if (finalAnalysisType === 'weekly') {
+          // WEEKLY: Compare with the previous week (7 days before the analyzed week)
+          const prevWeekEndDate = new Date(periodStartDate);
+          prevWeekEndDate.setDate(prevWeekEndDate.getDate() - 1); // Day before the analyzed week starts
+
+          const prevWeekStartDate = new Date(prevWeekEndDate);
+          prevWeekStartDate.setDate(prevWeekStartDate.getDate() - 6); // 7 days total (inclusive)
+
+          const prevWeekStartTimestamp = admin.firestore.Timestamp.fromDate(prevWeekStartDate);
+          const prevWeekEndTimestamp = admin.firestore.Timestamp.fromDate(prevWeekEndDate);
+
+          const prevWeekSpendingSnapshot = await accountRef
             .collection('spending')
-            .where('periodId', '==', previousPeriod.id)
+            .where('date', '>=', prevWeekStartTimestamp)
+            .where('date', '<=', prevWeekEndTimestamp)
             .get();
 
-          if (!prevSpendingSnapshot.empty) {
-            const prevSpending = prevSpendingSnapshot.docs.map((doc) => doc.data());
+          if (!prevWeekSpendingSnapshot.empty) {
+            const prevSpending = prevWeekSpendingSnapshot.docs.map((doc) => doc.data());
             const prevTotal = prevSpending.reduce((sum, s) => sum + s.amount, 0);
 
             // Calculate top categories
@@ -300,6 +311,57 @@ export const generateAiCheckin = async ({
               topTags,
             };
           }
+        } else {
+          // PERIOD-END: Compare with the previous period
+          if (periods.length > 1) {
+            const previousPeriod = periods[1];
+            const prevSpendingSnapshot = await accountRef
+              .collection('spending')
+              .where('periodId', '==', previousPeriod.id)
+              .get();
+
+            if (!prevSpendingSnapshot.empty) {
+              const prevSpending = prevSpendingSnapshot.docs.map((doc) => doc.data());
+              const prevTotal = prevSpending.reduce((sum, s) => sum + s.amount, 0);
+
+              // Calculate top categories
+              const categoryTotals = prevSpending.reduce(
+                (acc, s) => {
+                  acc[s.category] = (acc[s.category] || 0) + s.amount;
+                  return acc;
+                },
+                {} as Record<string, number>,
+              );
+              const topCategories = Object.entries(categoryTotals)
+                .map(([category, amount]) => ({ category, amount }))
+                .sort((a, b) => b.amount - a.amount)
+                .slice(0, 5);
+
+              // Calculate top tags
+              const tagTotals = prevSpending.reduce(
+                (acc, s) => {
+                  if (s.tags && Array.isArray(s.tags)) {
+                    for (const tag of s.tags) {
+                      acc[tag] = (acc[tag] || 0) + s.amount;
+                    }
+                  }
+                  return acc;
+                },
+                {} as Record<string, number>,
+              );
+              const topTags = Object.entries(tagTotals)
+                .map(([tag, amount]) => ({ tag, amount }))
+                .sort((a, b) => b.amount - a.amount)
+                .slice(0, 5);
+
+              historicalData = {
+                totalSpending: prevTotal,
+                transactionCount: prevSpending.length,
+                topCategories,
+                topTags,
+              };
+            }
+          }
         }
 
         // Generate AI insights
@@ -309,6 +371,7 @@ export const generateAiCheckin = async ({
           periodInfo,
           historicalData,
           account.currency || 'USD',
+          finalAnalysisType,
         );
 
         // Calculate metadata
