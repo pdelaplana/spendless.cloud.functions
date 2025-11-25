@@ -45,6 +45,7 @@ npm run deploy            # Deploy to Firebase (use with caution)
 - `exportData` - Allows users to export their data
 - `deleteAccount` - Permanently deletes user accounts and all data
 - `queueJob` - Adds jobs to the processing queue
+- `triggerAiCheckin` - Manually triggers AI spending analysis for premium users
 - `createCheckoutSession` - Creates a Stripe Checkout session for premium subscription
 - `createCustomerPortalSession` - Creates a Stripe Customer Portal session for subscription management
 
@@ -55,6 +56,12 @@ npm run deploy            # Deploy to Firebase (use with caution)
 **Firestore Triggers**:
 - `processJob` - Processes jobs from the `jobs/` collection when created
 - `sendWelcomeEmail` - Sends welcome email when Account document is created
+- `sendPremiumSubscriptionEmail` - Sends email when user upgrades to premium
+- `periodEndAiCheckin` - Triggers AI analysis when a spending period ends
+
+**Scheduled Functions**:
+- `weeklyAiCheckin` - Runs every Monday to generate AI insights for weekly users
+- `cleanupProcessedEvents` - Daily cleanup of old processed webhook events
 
 ### Job Processing System
 
@@ -68,6 +75,7 @@ The codebase implements an asynchronous job queue pattern:
 **Job Types** (defined in `types.ts`):
 - `exportData` - Export user data to CSV
 - `deleteAccount` - Delete user account and all associated data
+- `generateAiCheckin` - Generate AI-powered spending insights (premium only)
 
 To add a new job type:
 1. Add type to `JobType` union in `types.ts`
@@ -82,24 +90,35 @@ functions/src/
 ├── startup.ts            # Initialization (Sentry, Firebase Admin)
 ├── types.ts              # Shared TypeScript types
 ├── config/               # Configuration modules
-│   └── stripe.ts         # Stripe client initialization
+│   ├── stripe.ts         # Stripe client initialization
+│   └── gemini.ts         # Google Gemini API client initialization
 ├── helpers/              # Utility functions
-│   └── sendEmail.ts      # Mailgun email helper
+│   ├── sendEmail.ts      # Mailgun email helper
+│   └── aiInsights.ts     # AI insight generation and formatting
 ├── jobs/                 # Job handler implementations
 │   ├── exportData.ts     # Data export logic
-│   └── deleteAccount.ts  # Account deletion logic
+│   ├── deleteAccount.ts  # Account deletion logic
+│   └── generateAiCheckin.ts  # AI checkin generation
+├── scheduled/            # Scheduled and triggered functions
+│   ├── weeklyAiCheckin.ts    # Weekly AI checkin scheduler
+│   └── periodEndAiCheckin.ts # Period-end AI checkin trigger
 ├── stripe/               # Stripe integration functions
 │   ├── createCheckoutSession.ts        # Checkout session creation
 │   ├── createCustomerPortalSession.ts  # Customer portal creation
 │   ├── handleStripeWebhook.ts          # Webhook event processing
+│   ├── cleanupProcessedEvents.ts       # Cleanup scheduled function
 │   └── helpers.ts                      # Stripe utility functions
 ├── templates/emails/     # Email templates (markdown)
-│   └── welcome-email.md
+│   ├── welcome-email.md
+│   ├── premium-subscription-email.md
+│   └── ai-checkin.md
 ├── queueJob.ts           # HTTPS callable - queues jobs
 ├── processJob.ts         # Firestore trigger - processes queued jobs
 ├── exportData.ts         # HTTPS callable wrapper for exportData job
 ├── deleteAccount.ts      # HTTPS callable wrapper for deleteAccount job
+├── triggerAiCheckin.ts   # HTTPS callable - triggers AI checkin
 ├── sendWelcomeEmail.ts   # Firestore trigger - sends welcome emails
+├── sendPremiumSubscriptionEmail.ts  # Firestore trigger - sends premium email
 ├── healthCheck.ts        # HTTP function for monitoring
 └── __tests__/            # Jest unit tests
 ```
@@ -159,6 +178,7 @@ Required for local development (create `functions/.env`):
 - `ENVIRONMENT` - Application environment (development/staging/production)
 - `MAILGUN_API_KEY` - Mailgun API key
 - `MAILGUN_DOMAIN` - Mailgun sending domain
+- `GEMINI_API_KEY` - Google Gemini API key for AI Checkin feature
 
 Local development also requires:
 - `functions/spendless-firebase-adminsdk.json` - Firebase Admin SDK service account key
@@ -204,7 +224,9 @@ Key Firestore collections:
 - `accounts/{userId}/periods` - Spending periods
 - `accounts/{userId}/periods/{periodId}/wallets` - Wallets within periods
 - `accounts/{userId}/spending` - Spending transactions
+- `accounts/{userId}/aiInsights` - AI-generated spending insights (premium feature)
 - `jobs/{jobId}` - Job queue
+- `processedWebhookEvents/{eventId}` - Processed Stripe webhook events (for idempotency)
 
 ## Stripe Integration
 
@@ -359,6 +381,172 @@ Events to subscribe to:
 - customer.subscription.deleted
 - invoice.payment_succeeded
 - invoice.payment_failed
+
+## AI Checkin Integration
+
+This project includes an AI-powered spending analysis feature that generates personalized insights for premium users using Google Gemini API.
+
+### AI Checkin Functions
+
+**`triggerAiCheckin` (HTTPS Callable)**:
+- Manually triggers AI Checkin generation for the authenticated user
+- Input: `{ periodId?: string, analysisType?: 'weekly' | 'period-end' }`
+- Output: `{ success: boolean, message: string, jobId: string }`
+- Validates premium subscription with `hasActiveSubscription()`
+- Checks if AI Checkin is enabled for the account
+- Queues a `generateAiCheckin` job for async processing
+
+**`weeklyAiCheckin` (Scheduled Function)**:
+- Runs every Monday at 9:00 AM UTC
+- Automatically generates weekly insights for eligible premium users
+- Queries accounts with `aiCheckinEnabled: true` and frequency `'weekly'` or `'both'`
+- Queues jobs for each eligible user
+
+**`periodEndAiCheckin` (Firestore Trigger)**:
+- Listens to `accounts/{userId}/periods/{periodId}` document updates
+- Triggers when a period ends (closedAt is set or endAt passes)
+- Checks premium status, aiCheckinEnabled, and frequency preference
+- Queues AI checkin job for period-end users
+
+**`generateAiCheckin` (Job Handler)**:
+- Processes the queued AI checkin job asynchronously
+- Fetches spending data, period info, and historical data
+- Calls Google Gemini API to generate insights
+- Stores results in `accounts/{userId}/aiInsights` subcollection
+- Sends email with insights using template
+- Updates `lastAiCheckinAt` timestamp
+
+### AI Checkin Code Organization
+
+```
+functions/src/
+├── config/
+│   └── gemini.ts                        # Gemini API client initialization
+├── helpers/
+│   └── aiInsights.ts                    # AI insight generation and formatting
+├── jobs/
+│   └── generateAiCheckin.ts             # Job handler for AI checkin
+├── scheduled/
+│   ├── weeklyAiCheckin.ts               # Weekly scheduled trigger
+│   └── periodEndAiCheckin.ts            # Period-end Firestore trigger
+├── templates/emails/
+│   └── ai-checkin.md                    # Email template for insights
+└── triggerAiCheckin.ts                  # HTTPS callable for manual trigger
+```
+
+### AI Insight Types
+
+The AI analyzes spending data and generates:
+
+1. **Spending Patterns & Trends**:
+   - Overall spending trajectory (increasing, decreasing, stable)
+   - Day-of-week or time-based patterns
+   - Unusual or one-time large purchases
+   - Recurring vs. non-recurring spending distribution
+
+2. **Category Breakdown**:
+   - Top spending categories with amounts and percentages
+   - Budget performance assessment vs. targets
+
+3. **Tag Analysis** (user-defined tags on spending):
+   - Top tags by spending amount
+   - Tag trends over time (increasing/decreasing)
+   - Tag correlations (tags that frequently appear together)
+   - Tag-based budget recommendations
+
+4. **Period Comparison**:
+   - Comparison to previous period
+   - Improvements and concerns highlighted
+
+5. **Actionable Recommendations**:
+   - Specific, personalized suggestions to improve spending habits
+
+### AI Checkin Environment Variables
+
+**Local Development** (add to `functions/.env`):
+```bash
+# Google Gemini API Configuration
+GEMINI_API_KEY="your-gemini-api-key-here"
+```
+
+**Production Deployment**:
+```bash
+# Set secret using Cloud Secret Manager
+firebase functions:secrets:set GEMINI_API_KEY --project your-project-id
+```
+
+### AI Checkin Firestore Schema
+
+The `accounts` collection includes AI Checkin-related fields:
+```typescript
+interface Account {
+  // Existing fields...
+
+  // AI Checkin feature fields
+  aiCheckinEnabled?: boolean;                         // Whether AI Checkin is enabled
+  aiCheckinFrequency?: 'weekly' | 'period-end' | 'both';  // When to generate insights
+  lastAiCheckinAt?: Timestamp | null;                 // Last generation timestamp
+}
+```
+
+The `aiInsights` subcollection stores generated insights:
+```
+accounts/{userId}/aiInsights/{insightId}
+```
+
+```typescript
+interface AiInsight {
+  // Metadata
+  id: string;
+  userId: string;
+  accountId: string;
+
+  // Period/Time context
+  periodId?: string;
+  periodName?: string;
+  periodStartDate?: Timestamp;
+  periodEndDate?: Timestamp;
+  weekStartDate?: Timestamp;
+  weekEndDate?: Timestamp;
+
+  // Analysis metadata
+  analysisType: 'weekly' | 'period-end';
+  totalSpendingAnalyzed: number;
+  transactionCount: number;
+  categoriesAnalyzed: string[];
+  tagsAnalyzed: string[];
+
+  // Structured insights
+  insights: AiInsightData;  // Detailed structured data
+
+  // Formatted version (for email)
+  formattedInsights: string;  // Markdown-formatted complete insights
+
+  // Status tracking
+  generatedAt: Timestamp;
+  emailSentAt?: Timestamp;
+  emailStatus: 'pending' | 'sent' | 'failed';
+
+  // AI metadata
+  aiModel: string;          // e.g., "gemini-1.5-pro"
+  tokensUsed?: number;      // API usage tracking
+}
+```
+
+### AI Checkin Access Control
+
+- **Premium Only**: AI Checkin is available exclusively to premium subscribers
+- Validated using `hasActiveSubscription()` helper
+- Frontend should check `subscriptionTier === 'premium'` before showing AI Checkin features
+- Users can toggle `aiCheckinEnabled` and configure `aiCheckinFrequency` in settings
+
+### AI Checkin Job Type
+
+Added to the job processing system:
+- Job Type: `'generateAiCheckin'`
+- Processed by `processJob` trigger
+- Routed to `generateAiCheckin` job handler
+- Supports optional `periodId` and `analysisType` parameters
 
 ## Node Version
 

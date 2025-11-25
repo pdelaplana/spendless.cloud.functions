@@ -1,6 +1,11 @@
 import type { Timestamp } from 'firebase-admin/firestore';
 
-export type JobType = 'exportData' | 'deleteAccount' | 'anotherJobType' | 'anotherJobType2';
+export type JobType =
+  | 'exportData'
+  | 'deleteAccount'
+  | 'generateAiCheckin'
+  | 'anotherJobType'
+  | 'anotherJobType2';
 
 export type Job = {
   userId: string;
@@ -12,6 +17,10 @@ export type Job = {
   completedAt: Timestamp | null;
   errors: string[];
   attempts: number;
+  // Optional task-specific fields
+  periodId?: string; // For generateAiCheckin with period-end analysis
+  analysisType?: 'weekly' | 'period-end'; // For generateAiCheckin
+  date?: string; // For generateAiCheckin with weekly analysis (ISO string)
 };
 
 // Stripe-related types
@@ -46,6 +55,10 @@ export interface Account {
   stripeSubscriptionPaid?: boolean;
   stripeSubscriptionPayment?: number; // Amount paid in last successful payment (in cents)
   stripeSubscriptionPaymentFailedAt?: Timestamp | null;
+  // AI Checkin feature fields
+  aiCheckinEnabled?: boolean; // Whether AI Checkin feature is enabled
+  aiCheckinFrequency?: 'weekly' | 'period-end' | 'both'; // When to generate AI insights
+  lastAiCheckinAt?: Timestamp | null; // Last time AI checkin was generated
 }
 
 // Stripe function input/output types
@@ -87,4 +100,97 @@ export interface ProcessedWebhookEvent {
   eventId: string;
   eventType: string;
   processedAt: Timestamp;
+}
+
+// AI Checkin types
+
+export type AiCheckinFrequency = 'weekly' | 'period-end' | 'both';
+export type AiCheckinAnalysisType = 'weekly' | 'period-end';
+export type EmailStatus = 'pending' | 'sent' | 'failed';
+export type TrendDirection = 'increasing' | 'decreasing' | 'stable';
+
+export interface TopCategory {
+  category: string;
+  amount: number;
+  percentage: number;
+}
+
+export interface TopTag {
+  tag: string;
+  totalSpending: number;
+  transactionCount: number;
+  percentage: number;
+}
+
+export interface TagTrend {
+  tag: string;
+  trend: TrendDirection;
+  changePercentage: number;
+}
+
+export interface TagCorrelation {
+  tags: string[];
+  frequency: number;
+  totalSpending: number;
+}
+
+export interface AiInsightData {
+  patterns: {
+    summary: string;
+    trends: string[];
+    unusualSpending?: string[];
+  };
+  categories: {
+    topCategories: TopCategory[];
+    budgetPerformance?: string;
+  };
+  comparison?: {
+    summary: string;
+    improvements?: string[];
+    concerns?: string[];
+  };
+  tags: {
+    topTags: TopTag[];
+    tagTrends?: TagTrend[];
+    tagCorrelations?: TagCorrelation[];
+    budgetRecommendations?: string[];
+  };
+  recommendations: string[];
+}
+
+export interface AiInsight {
+  // Metadata
+  id: string;
+  userId: string;
+  accountId: string;
+
+  // Period/Time context
+  periodId?: string;
+  periodName?: string;
+  periodStartDate?: Timestamp;
+  periodEndDate?: Timestamp;
+  weekStartDate?: Timestamp;
+  weekEndDate?: Timestamp;
+
+  // Analysis metadata
+  analysisType: AiCheckinAnalysisType;
+  totalSpendingAnalyzed: number;
+  transactionCount: number;
+  categoriesAnalyzed: string[];
+  tagsAnalyzed: string[];
+
+  // Structured insights
+  insights: AiInsightData;
+
+  // Formatted version (for email and simple display)
+  formattedInsights: string;
+
+  // Status tracking
+  generatedAt: Timestamp;
+  emailSentAt?: Timestamp;
+  emailStatus: EmailStatus;
+
+  // AI metadata (for tracking/debugging)
+  aiModel: string;
+  tokensUsed?: number;
 }

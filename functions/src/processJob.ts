@@ -2,15 +2,17 @@ import * as Sentry from '@sentry/node';
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { geminiApiKey } from './config/gemini';
 import { stripeSecretKey } from './config/stripe';
 import { deleteAccount } from './jobs/deleteAccount';
 import { exportData } from './jobs/exportData';
+import { generateAiCheckin } from './jobs/generateAiCheckin';
 import type { Job } from './types';
 
 export const processJob = onDocumentCreated(
   {
     document: 'jobs/{jobId}',
-    secrets: [stripeSecretKey],
+    secrets: [stripeSecretKey, geminiApiKey],
   },
   async (event) => {
     return Sentry.startSpan(
@@ -37,6 +39,15 @@ export const processJob = onDocumentCreated(
             break;
           case 'deleteAccount':
             result = await deleteAccount({ userId: job.userId, userEmail: job.userEmail });
+            break;
+          case 'generateAiCheckin':
+            result = await generateAiCheckin({
+              userId: job.userId,
+              userEmail: job.userEmail,
+              periodId: (job as Job & { periodId?: string }).periodId,
+              analysisType: (job as Job & { analysisType?: 'weekly' | 'period-end' }).analysisType,
+              date: (job as Job & { date?: string }).date,
+            });
             break;
           default:
             console.error(`Unknown job type: ${job.jobType}`);
