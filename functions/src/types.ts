@@ -56,8 +56,7 @@ export interface Account {
   stripeSubscriptionPayment?: number; // Amount paid in last successful payment (in cents)
   stripeSubscriptionPaymentFailedAt?: Timestamp | null;
   // AI Checkin feature fields
-  aiCheckinEnabled?: boolean; // Whether AI Checkin feature is enabled
-  aiCheckinFrequency?: 'weekly' | 'period-end' | 'both'; // When to generate AI insights
+  aiCheckinEnabled?: boolean; // Whether AI Checkin feature is enabled (enables both weekly and period-end)
   lastAiCheckinAt?: Timestamp | null; // Last time AI checkin was generated
 }
 
@@ -104,7 +103,6 @@ export interface ProcessedWebhookEvent {
 
 // AI Checkin types
 
-export type AiCheckinFrequency = 'weekly' | 'period-end' | 'both';
 export type AiCheckinAnalysisType = 'weekly' | 'period-end';
 export type EmailStatus = 'pending' | 'sent' | 'failed';
 export type TrendDirection = 'increasing' | 'decreasing' | 'stable';

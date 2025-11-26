@@ -34,7 +34,6 @@ export const weeklyAiCheckin = functions.scheduler.onSchedule(
           // Eligible accounts must:
           // 1. Have premium subscription tier
           // 2. Have aiCheckinEnabled = true
-          // 3. Have aiCheckinFrequency = 'weekly' or 'both'
           const accountsSnapshot = await db
             .collection('accounts')
             .where('subscriptionTier', '==', 'premium')
@@ -46,17 +45,7 @@ export const weeklyAiCheckin = functions.scheduler.onSchedule(
             return;
           }
 
-          // Filter accounts by frequency preference
-          const eligibleAccounts = accountsSnapshot.docs.filter((doc) => {
-            const account = doc.data() as Account;
-            const frequency = account.aiCheckinFrequency;
-            return frequency === 'weekly' || frequency === 'both';
-          });
-
-          if (eligibleAccounts.length === 0) {
-            console.log('No accounts with weekly frequency preference found');
-            return;
-          }
+          const eligibleAccounts = accountsSnapshot.docs;
 
           console.log(`Found ${eligibleAccounts.length} eligible accounts for weekly AI checkin`);
 
