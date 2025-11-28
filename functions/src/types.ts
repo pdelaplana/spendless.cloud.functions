@@ -133,6 +133,7 @@ export interface TagCorrelation {
 }
 
 export interface AiInsightData {
+  keyTakeaway: string; // Personal text message from financial coach
   patterns: {
     summary: string;
     trends: string[];
@@ -182,6 +183,9 @@ export interface AiInsight {
 
   // Formatted version (for email and simple display)
   formattedInsights: string;
+
+  // Key takeaway (for messaging/notification system)
+  keyTakeaway: string;
 
   // Status tracking
   generatedAt: Timestamp;
