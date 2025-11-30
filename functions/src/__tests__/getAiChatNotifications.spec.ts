@@ -1,5 +1,5 @@
-import functionsTest from 'firebase-functions-test';
 import * as admin from 'firebase-admin';
+import functionsTest from 'firebase-functions-test';
 
 // Initialize firebase-functions-test
 const test = functionsTest();
@@ -169,9 +169,7 @@ describe('getAiChatNotifications', () => {
     };
 
     const wrapped = test.wrap(getAiChatNotifications);
-    await expect(wrapped(request as any)).rejects.toThrow(
-      'User must be authenticated',
-    );
+    await expect(wrapped(request as any)).rejects.toThrow('User must be authenticated');
   });
 
   it('should throw error when user ID is missing', async () => {
@@ -191,9 +189,7 @@ describe('getAiChatNotifications', () => {
     };
 
     const wrapped = test.wrap(getAiChatNotifications);
-    await expect(wrapped(request as any)).rejects.toThrow(
-      'Limit cannot exceed 100',
-    );
+    await expect(wrapped(request as any)).rejects.toThrow('Limit cannot exceed 100');
   });
 
   it('should use default limit of 50 when not provided', async () => {

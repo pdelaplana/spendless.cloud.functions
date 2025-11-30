@@ -1,5 +1,5 @@
-import functionsTest from 'firebase-functions-test';
 import * as admin from 'firebase-admin';
+import functionsTest from 'firebase-functions-test';
 
 // Initialize firebase-functions-test
 const test = functionsTest();

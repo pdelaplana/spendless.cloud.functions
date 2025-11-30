@@ -2,20 +2,26 @@ import * as admin from 'firebase-admin';
 
 // Mock firebase-admin
 jest.mock('firebase-admin', () => {
-  return {
-    firestore: jest.fn().mockReturnValue({
-      collection: jest.fn(),
+  const mockTimestamp = {
+    now: jest.fn().mockReturnValue({
+      seconds: 1705316400, // 2025-01-15 09:00:00 UTC (mid-period for Jan 1-31)
+      toDate: () => new Date('2025-01-15T09:00:00Z'),
     }),
-    Timestamp: {
-      now: jest.fn().mockReturnValue({
-        seconds: 1705316400, // 2025-01-15 09:00:00 UTC (mid-period for Jan 1-31)
-        toDate: () => new Date('2025-01-15T09:00:00Z'),
+    fromDate: jest.fn((date: Date) => ({
+      seconds: Math.floor(date.getTime() / 1000),
+      toDate: () => date,
+    })),
+  };
+
+  return {
+    firestore: Object.assign(
+      jest.fn().mockReturnValue({
+        collection: jest.fn(),
       }),
-      fromDate: jest.fn((date: Date) => ({
-        seconds: Math.floor(date.getTime() / 1000),
-        toDate: () => date,
-      })),
-    },
+      {
+        Timestamp: mockTimestamp,
+      },
+    ),
   };
 });
 
@@ -56,13 +62,14 @@ jest.mock('../helpers/aiChatPrompt', () => ({
 import { calculateCategoryBreakdown, getSpendingDataForPeriod } from '../helpers/aiChatContext';
 import { buildNotificationPrompt } from '../helpers/aiChatPrompt';
 // Import after mocks
-import { aiCoachScheduledChecks } from '../scheduled/aiCoachScheduledChecks';
+import { aiCoachScheduledChecksHandler } from '../scheduled/aiCoachScheduledChecks';
 import { hasActiveSubscription } from '../stripe/helpers';
 
 describe('aiCoachScheduledChecks', () => {
   const mockAccountsRef = {
     where: jest.fn().mockReturnThis(),
     get: jest.fn(),
+    doc: jest.fn(),
   };
 
   const mockPeriodsRef = {
@@ -79,7 +86,7 @@ describe('aiCoachScheduledChecks', () => {
   };
 
   const mockNotificationDoc = {
-    set: jest.fn(),
+    set: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockCollection = jest.fn((name: string) => {
@@ -106,6 +113,20 @@ describe('aiCoachScheduledChecks', () => {
     (admin.firestore as unknown as jest.Mock).mockReturnValue({
       collection: mockCollection,
     });
+
+    // Setup mockAccountsRef.doc to return an object with collection method
+    mockAccountsRef.doc.mockReturnValue({
+      collection: jest.fn((subName: string) => {
+        if (subName === 'periods') {
+          return mockPeriodsRef;
+        }
+        if (subName === 'aiChatNotifications') {
+          return mockNotificationsRef;
+        }
+        return {};
+      }),
+    });
+
     mockNotificationsRef.doc.mockReturnValue(mockNotificationDoc);
     mockNotificationDoc.set.mockResolvedValue(undefined);
   });
@@ -173,7 +194,7 @@ describe('aiCoachScheduledChecks', () => {
     });
 
     // Execute function
-    await aiCoachScheduledChecks({} as never);
+    await aiCoachScheduledChecksHandler();
 
     // Verify notification was created
     expect(mockNotificationDoc.set).toHaveBeenCalledWith(
@@ -255,7 +276,7 @@ describe('aiCoachScheduledChecks', () => {
       },
     });
 
-    await aiCoachScheduledChecks({} as never);
+    await aiCoachScheduledChecksHandler();
 
     expect(mockNotificationDoc.set).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -323,7 +344,7 @@ describe('aiCoachScheduledChecks', () => {
       },
     });
 
-    await aiCoachScheduledChecks({} as never);
+    await aiCoachScheduledChecksHandler();
 
     expect(mockNotificationDoc.set).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -349,7 +370,7 @@ describe('aiCoachScheduledChecks', () => {
 
     (hasActiveSubscription as jest.Mock).mockResolvedValue(false);
 
-    await aiCoachScheduledChecks({} as never);
+    await aiCoachScheduledChecksHandler();
 
     // Should not create any notifications
     expect(mockNotificationDoc.set).not.toHaveBeenCalled();
@@ -378,7 +399,7 @@ describe('aiCoachScheduledChecks', () => {
       docs: [],
     });
 
-    await aiCoachScheduledChecks({} as never);
+    await aiCoachScheduledChecksHandler();
 
     expect(mockNotificationDoc.set).not.toHaveBeenCalled();
   });
@@ -420,12 +441,12 @@ describe('aiCoachScheduledChecks', () => {
       docs: [{ id: 'recent-notif' }],
     });
 
-    await aiCoachScheduledChecks({} as never);
+    await aiCoachScheduledChecksHandler();
 
     expect(mockNotificationDoc.set).not.toHaveBeenCalled();
   });
 
-  it('should skip accounts when no notification conditions are met', async () => {
+  it('should respect 24-hour notification cooldown', async () => {
     // Set date to Jan 10 (32% through period, not mid-point)
     (admin.firestore.Timestamp.now as jest.Mock).mockReturnValue({
       seconds: 1704880800, // 2025-01-10 12:00:00 UTC
@@ -475,7 +496,7 @@ describe('aiCoachScheduledChecks', () => {
       { category: 'essentials', amount: 500, count: 1 },
     ]);
 
-    await aiCoachScheduledChecks({} as never);
+    await aiCoachScheduledChecksHandler();
 
     // Should not create notification (32% through period, 50% budget - no conditions met)
     expect(mockNotificationDoc.set).not.toHaveBeenCalled();
@@ -530,7 +551,7 @@ describe('aiCoachScheduledChecks', () => {
     mockGenerateContent.mockRejectedValue(new Error('Gemini API error'));
 
     // Should not throw, but log error
-    await expect(aiCoachScheduledChecks({} as never)).resolves.not.toThrow();
+    await expect(aiCoachScheduledChecksHandler()).resolves.not.toThrow();
 
     // Should not create notification
     expect(mockNotificationDoc.set).not.toHaveBeenCalled();
@@ -542,7 +563,7 @@ describe('aiCoachScheduledChecks', () => {
       docs: [],
     });
 
-    await expect(aiCoachScheduledChecks({} as never)).resolves.not.toThrow();
+    await expect(aiCoachScheduledChecksHandler()).resolves.not.toThrow();
 
     expect(mockNotificationDoc.set).not.toHaveBeenCalled();
   });

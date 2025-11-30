@@ -199,4 +199,5 @@ export const aiChat = functions.https.onCall<AiChatRequest, Promise<AiChatRespon
         );
       }
     });
-  });
+  },
+);
