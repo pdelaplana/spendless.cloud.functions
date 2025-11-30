@@ -4,6 +4,7 @@ import * as functions from 'firebase-functions/v2';
 import { geminiApiKey, getGeminiModel } from '../config/gemini';
 import { calculateCategoryBreakdown, getSpendingDataForPeriod } from '../helpers/aiChatContext';
 import { buildNotificationPrompt } from '../helpers/aiChatPrompt';
+import { extractFirstName } from '../helpers/userHelpers';
 import { hasActiveSubscription } from '../stripe/helpers';
 import type { Account, AiChatNotificationType } from '../types';
 
@@ -155,7 +156,9 @@ export async function aiCoachScheduledChecksHandler() {
             );
 
             // 2g. Generate notification content using Gemini
-            const userName = account.name.split(' ')[0] || 'there';
+            // Get user's display name for personalization
+            const user = await admin.auth().getUser(userId);
+            const userName = extractFirstName(user.displayName);
             const prompt = buildNotificationPrompt(
               userName,
               notificationType,

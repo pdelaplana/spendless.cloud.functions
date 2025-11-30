@@ -5,20 +5,7 @@ import admin from 'firebase-admin';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { convertMarkdownToHtml, replaceTemplateVariables } from './helpers/emailMarkdown';
 import { sendEmailNotification } from './helpers/sendEmail';
-
-/**
- * Extracts the first name from a display name
- * @param displayName - The full display name (e.g., "John Doe")
- * @returns The first name or "there" as fallback
- */
-function extractFirstName(displayName: string | null | undefined): string {
-  if (!displayName || displayName.trim() === '') {
-    return 'there';
-  }
-
-  const parts = displayName.trim().split(/\s+/);
-  return parts[0] || 'there';
-}
+import { extractFirstName } from './helpers/userHelpers';
 
 /**
  * Loads and parses the welcome email template

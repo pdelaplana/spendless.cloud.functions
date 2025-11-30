@@ -88,6 +88,15 @@ describe('aiChat', () => {
     (admin.firestore as unknown as jest.Mock).mockReturnValue({
       collection: mockCollection,
     });
+
+    // Mock auth().getUser()
+    (admin.auth as unknown as jest.Mock).mockReturnValue({
+      getUser: jest.fn().mockResolvedValue({
+        uid: 'user123',
+        displayName: 'John Doe',
+        email: 'john@example.com',
+      }),
+    });
   });
 
   afterAll(() => {

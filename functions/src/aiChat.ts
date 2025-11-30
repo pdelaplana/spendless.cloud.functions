@@ -12,6 +12,7 @@ import {
 import { buildAiChatPrompt } from './helpers/aiChatPrompt';
 import type { PeriodInfoForAi, SpendingDataForAi } from './helpers/aiInsights';
 import { checkRateLimit } from './helpers/rateLimit';
+import { extractFirstName } from './helpers/userHelpers';
 import { hasActiveSubscription } from './stripe/helpers';
 import type { Account, AiChatRequest, AiChatResponse } from './types';
 
@@ -74,8 +75,11 @@ export const aiChat = functions.https.onCall<AiChatRequest, Promise<AiChatRespon
         throw new functions.https.HttpsError('not-found', 'Account not found.');
       }
 
+      // Get user's display name for personalization
+      const user = await admin.auth().getUser(userId);
+      const userName = extractFirstName(user.displayName);
+
       const account = accountSnapshot.data() as Account;
-      const userName = account.name.split(' ')[0] || 'there'; // First name
 
       // 4. Validate premium subscription
       const hasPremium = await hasActiveSubscription(userId);

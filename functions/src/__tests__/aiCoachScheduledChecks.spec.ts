@@ -22,6 +22,9 @@ jest.mock('firebase-admin', () => {
         Timestamp: mockTimestamp,
       },
     ),
+    auth: jest.fn().mockReturnValue({
+      getUser: jest.fn(),
+    }),
   };
 });
 
@@ -112,6 +115,15 @@ describe('aiCoachScheduledChecks', () => {
     jest.clearAllMocks();
     (admin.firestore as unknown as jest.Mock).mockReturnValue({
       collection: mockCollection,
+    });
+
+    // Mock auth().getUser()
+    (admin.auth as unknown as jest.Mock).mockReturnValue({
+      getUser: jest.fn().mockResolvedValue({
+        uid: 'user123',
+        displayName: 'John Doe',
+        email: 'john@example.com',
+      }),
     });
 
     // Setup mockAccountsRef.doc to return an object with collection method

@@ -9,6 +9,7 @@ import {
 } from '../helpers/aiInsights';
 import { convertMarkdownToHtml, replaceTemplateVariables } from '../helpers/emailMarkdown';
 import { sendEmailNotification } from '../helpers/sendEmail';
+import { extractFirstName } from '../helpers/userHelpers';
 import { hasActiveSubscription } from '../stripe/helpers';
 import type { Account, AiInsight } from '../types';
 
@@ -366,9 +367,7 @@ export const generateAiCheckin = async ({
 
         // Get user's display name for personalization
         const user = await admin.auth().getUser(userId);
-        const userDisplayName = user.displayName || 'there';
-        // Extract first name (split on space, take first part)
-        const userFirstName = userDisplayName.split(' ')[0];
+        const userFirstName = extractFirstName(user.displayName);
 
         // Generate AI insights
         console.log('Generating AI insights for user', userId);

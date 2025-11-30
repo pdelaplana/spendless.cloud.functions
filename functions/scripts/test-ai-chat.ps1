@@ -1,4 +1,4 @@
-# Test AI Chat Feature
+﻿# Test AI Chat Feature
 # This script tests the aiChat function with various scenarios
 
 param(
@@ -119,7 +119,7 @@ $data2 = @{
         },
         @{
             role = "assistant"
-            content = "You've spent $450 this month across 23 transactions."
+            content = 'You have spent $450 this month across 23 transactions.'
         }
     )
 }
