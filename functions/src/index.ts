@@ -18,3 +18,8 @@ export { cleanupProcessedEvents } from './stripe/cleanupProcessedEvents';
 export { triggerAiCheckin } from './triggerAiCheckin';
 export { weeklyAiCheckin } from './scheduled/weeklyAiCheckin';
 export { periodEndAiCheckin } from './scheduled/periodEndAiCheckin';
+
+// AI Chat functions
+export { aiChat } from './aiChat';
+export { getAiChatNotifications } from './getAiChatNotifications';
+export { aiCoachScheduledChecks } from './scheduled/aiCoachScheduledChecks';

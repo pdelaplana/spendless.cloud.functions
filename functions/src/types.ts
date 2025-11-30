@@ -58,6 +58,8 @@ export interface Account {
   // AI Checkin feature fields
   aiCheckinEnabled?: boolean; // Whether AI Checkin feature is enabled (enables both weekly and period-end)
   lastAiCheckinAt?: Timestamp | null; // Last time AI checkin was generated
+  // AI Chat feature fields
+  aiChatEnabled?: boolean; // Whether AI Chat feature is enabled (enables both chat and notifications)
 }
 
 // Stripe function input/output types
@@ -195,4 +197,61 @@ export interface AiInsight {
   // AI metadata (for tracking/debugging)
   aiModel: string;
   tokensUsed?: number;
+}
+
+// AI Chat types
+
+export type AiChatNotificationType = 'milestone' | 'budget-warning' | 'period-ending';
+
+export interface AiChatNotification {
+  id: string;
+  userId: string;
+  accountId: string;
+  periodId: string;
+  periodName: string;
+
+  // Message content
+  content: string;
+  checkInType: AiChatNotificationType;
+
+  // Metadata
+  createdAt: Timestamp;
+  readAt?: Timestamp;
+  isRead: boolean;
+
+  // AI tracking
+  tokensUsed: number;
+  aiModel: string;
+}
+
+export interface AiChatSessionMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AiChatRequest {
+  message: string;
+  periodId?: string;
+  sessionHistory?: AiChatSessionMessage[];
+}
+
+export interface AiChatResponse {
+  response: string;
+  tokensUsed: number;
+}
+
+export interface GetAiChatNotificationsRequest {
+  limit?: number;
+}
+
+export interface GetAiChatNotificationsResponse {
+  notifications: AiChatNotification[];
+}
+
+export interface RateLimit {
+  userId: string;
+  hourlyCount: number;
+  dailyCount: number;
+  lastHourReset: Timestamp;
+  lastDayReset: Timestamp;
 }
