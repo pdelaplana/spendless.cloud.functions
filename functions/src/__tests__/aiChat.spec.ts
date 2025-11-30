@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import * as admin from 'firebase-admin';
 import functionsTest from 'firebase-functions-test';
 
