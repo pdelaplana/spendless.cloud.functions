@@ -14,7 +14,7 @@ import type { Account, Job } from '../types';
  */
 export const weeklyAiCheckin = functions.scheduler.onSchedule(
   {
-    schedule: 'every monday 09:00',
+    schedule: '0 9 * * 1',
     timeZone: 'UTC',
     secrets: [geminiApiKey],
   },
