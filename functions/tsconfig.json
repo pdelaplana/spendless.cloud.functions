@@ -11,12 +11,10 @@
     "target": "es2017",
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "types": ["jest", "node"]
   },
   "compileOnSave": true,
   "include": [
     "src"
-  ],
-  "exclude": [
-    "src/__tests__"
   ]
 }

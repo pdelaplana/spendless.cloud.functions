@@ -9,6 +9,7 @@ import {
 } from '../helpers/aiInsights';
 import { convertMarkdownToHtml, replaceTemplateVariables } from '../helpers/emailMarkdown';
 import { sendEmailNotification } from '../helpers/sendEmail';
+import { extractFirstName } from '../helpers/userHelpers';
 import { hasActiveSubscription } from '../stripe/helpers';
 import type { Account, AiInsight } from '../types';
 
@@ -364,14 +365,19 @@ export const generateAiCheckin = async ({
           }
         }
 
+        // Get user's display name for personalization
+        const user = await admin.auth().getUser(userId);
+        const userFirstName = extractFirstName(user.displayName);
+
         // Generate AI insights
         console.log('Generating AI insights for user', userId);
-        const { insights, formattedInsights, tokensUsed } = await generateAiInsights(
+        const { insights, formattedInsights, keyTakeaway, tokensUsed } = await generateAiInsights(
           spendingData,
           periodInfo,
           historicalData,
           account.currency || 'USD',
           finalAnalysisType,
+          userFirstName,
         );
 
         // Calculate metadata
@@ -394,6 +400,7 @@ export const generateAiCheckin = async ({
           tagsAnalyzed,
           insights,
           formattedInsights,
+          keyTakeaway, // Store key takeaway for messaging/notification system
           generatedAt: admin.firestore.Timestamp.now(),
           emailStatus: 'pending',
           aiModel: 'gemini-2.5-flash',
@@ -406,8 +413,7 @@ export const generateAiCheckin = async ({
 
         // Send email
         try {
-          // Get user's display name from Firebase Auth
-          const user = await admin.auth().getUser(userId);
+          // Use the display name we already fetched
           const userName = user.displayName || 'Hey there';
 
           const { subject, html } = await loadAiCheckinEmailTemplate(

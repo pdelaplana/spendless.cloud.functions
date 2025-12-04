@@ -65,8 +65,6 @@ export const periodEndAiCheckin = onDocumentUpdated(
           // Check if user is eligible for period-end AI checkins
           const isPremium = account.subscriptionTier === 'premium';
           const isEnabled = account.aiCheckinEnabled === true;
-          const frequency = account.aiCheckinFrequency;
-          const wantsPeriodEnd = frequency === 'period-end' || frequency === 'both';
 
           if (!isPremium) {
             console.log(`User ${userId} is not premium. Skipping AI checkin.`);
@@ -75,13 +73,6 @@ export const periodEndAiCheckin = onDocumentUpdated(
 
           if (!isEnabled) {
             console.log(`AI checkin is disabled for user ${userId}. Skipping.`);
-            return null;
-          }
-
-          if (!wantsPeriodEnd) {
-            console.log(
-              `User ${userId} has frequency "${frequency}". Skipping period-end checkin.`,
-            );
             return null;
           }
 

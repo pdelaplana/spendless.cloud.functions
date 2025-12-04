@@ -483,8 +483,7 @@ interface Account {
   // Existing fields...
 
   // AI Checkin feature fields
-  aiCheckinEnabled?: boolean;                         // Whether AI Checkin is enabled
-  aiCheckinFrequency?: 'weekly' | 'period-end' | 'both';  // When to generate insights
+  aiCheckinEnabled?: boolean;                         // Whether AI Checkin is enabled (enables both weekly and period-end)
   lastAiCheckinAt?: Timestamp | null;                 // Last generation timestamp
 }
 ```
@@ -538,7 +537,7 @@ interface AiInsight {
 - **Premium Only**: AI Checkin is available exclusively to premium subscribers
 - Validated using `hasActiveSubscription()` helper
 - Frontend should check `subscriptionTier === 'premium'` before showing AI Checkin features
-- Users can toggle `aiCheckinEnabled` and configure `aiCheckinFrequency` in settings
+- Users can toggle `aiCheckinEnabled` in settings (enables both weekly and period-end insights)
 
 ### AI Checkin Job Type
 

@@ -142,6 +142,7 @@ export function formatSpendingDataForPrompt(
 export function buildAiPrompt(
   formattedData: string,
   analysisType: 'weekly' | 'period-end' = 'weekly',
+  userName = 'there',
 ): string {
   const comparisonContext = analysisType === 'weekly' ? 'previous week' : 'previous period';
 
@@ -150,6 +151,32 @@ export function buildAiPrompt(
 # Analysis Task
 
 You are a financial advisor analyzing a user's spending data. Please provide a comprehensive analysis in the following structured format:
+
+## 0. KEY TAKEAWAY (REQUIRED)
+This is the MOST IMPORTANT part of your analysis. Write a personal text message from a financial coach to the user. This should be:
+- 2-3 sentences in casual, conversational tone
+- Written like a text message or instant message you'd send to a friend
+- Start with a varied casual greeting using the user's first name: "${userName}"
+  * Examples: "Hey, ${userName}.", "Hi ${userName}!", "${userName}, great work!", "Nice job, ${userName}!"
+- The single most critical or noteworthy observation from the entire analysis
+- Action-oriented and specific (include actual amounts, categories, or percentages)
+- Supportive, encouraging, and motivational
+- Celebrate wins or frame challenges as opportunities
+
+Examples of GOOD key takeaways:
+- "Hey, ${userName}. One key thing I noticed this week is that you spent $240 on dining out. Let's try to keep this to a minimum - cooking at home could save you $100 weekly!"
+- "${userName}, great work on lessening your Rewards spending by 25%! Let's maintain this rate and you'll hit your savings goal by next month."
+- "Hi ${userName}! Your Essentials are looking solid, but weekend spending jumped to $180. Planning ahead for weekends could cut that in half."
+- "Nice job, ${userName}! You stayed under budget in 4 out of 5 categories. The one area to watch is Connections - it's up 30% from last period."
+
+Examples of BAD messages (avoid these):
+- "You spent a lot this week." (not specific, not conversational, no name)
+- "Try to spend less money." (too generic, not encouraging)
+- "Your spending was about average." (not insightful, no action, boring)
+- "Good job!" (too short, no specific feedback)
+
+Format your response as:
+**Key Takeaway:** [Your 2-3 sentence conversational message here]
 
 ## 1. SPENDING PATTERNS & TRENDS
 Provide a summary of overall spending patterns and identify 2-4 key trends. Look for:
@@ -266,6 +293,10 @@ export function parseAiResponse(aiResponse: string, _currency = 'USD'): AiInsigh
     return match ? match[1].trim() : '';
   };
 
+  // Parse key takeaway section (FIRST)
+  const keyTakeawaySection = extractSection(aiResponse, 'KEY TAKEAWAY');
+  const keyTakeaway = extractSummary(keyTakeawaySection, 'Key Takeaway');
+
   // Parse patterns section
   const patternsSection = extractSection(aiResponse, 'SPENDING PATTERNS');
   const patternsSummary = extractSummary(patternsSection, 'Summary');
@@ -349,6 +380,7 @@ export function parseAiResponse(aiResponse: string, _currency = 'USD'): AiInsigh
   const recommendations = extractListItems(recommendationsSection, 'Recommendations');
 
   return {
+    keyTakeaway: keyTakeaway || 'Hey! Keep up the great work tracking your spending!',
     patterns: {
       summary: patternsSummary || 'Spending analysis completed',
       trends: trends.length > 0 ? trends : ['No significant trends identified'],
@@ -484,7 +516,13 @@ export async function generateAiInsights(
   historicalData?: HistoricalDataForAi,
   currency = 'USD',
   analysisType: 'weekly' | 'period-end' = 'weekly',
-): Promise<{ insights: AiInsightData; formattedInsights: string; tokensUsed?: number }> {
+  userName = 'there',
+): Promise<{
+  insights: AiInsightData;
+  formattedInsights: string;
+  keyTakeaway: string;
+  tokensUsed?: number;
+}> {
   return Sentry.startSpan({ name: 'generateAiInsights', op: 'ai.generation' }, async () => {
     try {
       // Format data for prompt
@@ -495,8 +533,8 @@ export async function generateAiInsights(
         currency,
       );
 
-      // Build complete prompt
-      const prompt = buildAiPrompt(formattedData, analysisType);
+      // Build complete prompt with user name
+      const prompt = buildAiPrompt(formattedData, analysisType, userName);
 
       // Get Gemini model (uses gemini-1.5-pro-latest by default)
       const model = getGeminiModel();
@@ -509,7 +547,10 @@ export async function generateAiInsights(
       // Parse response
       const insights = parseAiResponse(text, currency);
 
-      // Generate formatted markdown
+      // Extract key takeaway (it's in insights.keyTakeaway)
+      const keyTakeaway = insights.keyTakeaway;
+
+      // Generate formatted markdown (WITHOUT key takeaway - it's stored separately)
       const formattedInsights = formatInsightsAsMarkdown(
         insights,
         currentPeriod.name,
@@ -523,6 +564,7 @@ export async function generateAiInsights(
       return {
         insights,
         formattedInsights,
+        keyTakeaway,
         tokensUsed,
       };
     } catch (error) {
