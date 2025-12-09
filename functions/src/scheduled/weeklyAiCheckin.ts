@@ -3,18 +3,18 @@ import * as admin from 'firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import * as functions from 'firebase-functions/v2';
 import { geminiApiKey } from '../config/gemini';
-import type { Account, Job } from '../types';
+import type { Job } from '../types';
 
 /**
  * Scheduled function to generate weekly AI Check-ins for eligible premium users.
  * Runs every Monday at 9:00 AM UTC to generate insights for users who have
  * weekly or both frequency settings enabled.
  *
- * Schedule: Every Monday at 9:00 AM UTC
+ * Schedule: TESTING - Every day at 9:00 AM UTC (will revert to: Every Monday at 9:00 AM UTC)
  */
 export const weeklyAiCheckin = functions.scheduler.onSchedule(
   {
-    schedule: '0 9 * * 1',
+    schedule: '0 9 * * *', // TESTING: Every day at 9:00 AM UTC
     timeZone: 'UTC',
     secrets: [geminiApiKey],
   },
@@ -55,8 +55,7 @@ export const weeklyAiCheckin = functions.scheduler.onSchedule(
 
           for (const accountDoc of eligibleAccounts) {
             try {
-              const account = accountDoc.data() as Account;
-              const userId = account.userId;
+              const userId = accountDoc.id; // Use document ID as userId
 
               // Get user email from Firebase Auth
               let userEmail = '';
