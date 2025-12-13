@@ -9,12 +9,10 @@ import type { Job } from '../types';
  * Scheduled function to generate weekly AI Check-ins for eligible premium users.
  * Runs every Monday at 9:00 AM UTC to generate insights for users who have
  * weekly or both frequency settings enabled.
- *
- * Schedule: TESTING - Every day at 9:00 AM UTC (will revert to: Every Monday at 9:00 AM UTC)
  */
 export const weeklyAiCheckin = functions.scheduler.onSchedule(
   {
-    schedule: '0 9 * * *', // TESTING: Every day at 9:00 AM UTC
+    schedule: '0 9 * * 1', // Every Monday at 9:00 AM UTC
     timeZone: 'UTC',
     secrets: [geminiApiKey],
   },
